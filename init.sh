@@ -92,7 +92,10 @@ run_tests() {
   fi
 }
 
-run_tests products-service products-service requirements.txt python3 python3 -m pytest
+# products-service usa su venv local si existe (ahí están pytest y las dependencias)
+PRODUCTS_PY="python3"
+[ -x products-service/.venv/bin/python ] && PRODUCTS_PY="$PWD/products-service/.venv/bin/python"
+run_tests products-service products-service requirements.txt python3 "$PRODUCTS_PY" -m pytest -q
 run_tests orders-service orders-service go.mod go go test ./...
 run_tests frontend frontend package.json npm npm test -- --watch=false
 

@@ -15,8 +15,8 @@
       "dependencies": [
         "change-0"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "done",
+      "evidence": "pytest: 23 passed (SQLite en memoria); ruff check/format sin errores; docker build products-service:dev OK, id -u = 10001; verificado contra postgres:16-alpine en contenedores temporales: /health 200, GET /products 3 sembrados, POST 201, GET /products/9999 404, POST precio 0 -> 422, reinicio sin duplicar siembra; openspec validate products-service-fastapi válido; ./init.sh exit 0; archivado en openspec/changes/archive/2026-11-17-products-service-fastapi; main specs products-catalog y service-health"
     },
     {
       "id": "change-2",
