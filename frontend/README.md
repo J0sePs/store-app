@@ -56,7 +56,9 @@ npm run build
 | `/api/products/health` | `products-service:8000/health` |
 | `/api/orders/health` | `orders-service:8080/health` |
 
-Cualquier otra ruta `/api/...` devuelve 404, y las rutas de la SPA (`/orders`, etc.) devuelven `index.html`. nginx resuelve los nombres `products-service` y `orders-service` al arrancar, así que deben existir en la red (en `docker compose` y en Kubernetes).
+Cualquier otra ruta `/api/...` devuelve 404, y las rutas de la SPA (`/orders`, etc.) devuelven `index.html`.
+
+El propio frontend expone `GET /health` → `{"status": "ok", "version": "<APP_VERSION>"}` (con `Cache-Control: no-store`). No consulta a los servicios, así que responde 200 aunque estén caídos: es la probe de Kubernetes (readiness y liveness). nginx resuelve los nombres `products-service` y `orders-service` al arrancar, así que deben existir en la red (en `docker compose` y en Kubernetes).
 
 ## Docker
 
@@ -67,4 +69,4 @@ docker build --build-arg APP_VERSION=abc1234 -t frontend:dev .
 docker run --rm -p 8080:8080 frontend:dev
 ```
 
-`APP_VERSION` (por defecto `dev`) se fija al construir y se publica en `/version.json`, que nginx sirve con `Cache-Control: no-store`. Solo admite letras, números, punto, guion y guion bajo. CI pasará aquí el SHA corto de la imagen.
+`APP_VERSION` (por defecto `dev`) se fija al construir y se publica en `/version.json` y en `/health`, que nginx sirve con `Cache-Control: no-store`. Solo admite letras, números, punto, guion y guion bajo. CI pasará aquí el SHA corto de la imagen.

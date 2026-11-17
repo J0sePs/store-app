@@ -6,11 +6,12 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# La versión se fija al construir la imagen (CI pasará el SHA corto) y se publica en /version.json
+# La versión se fija al construir la imagen (CI pasará el SHA corto) y se publica en /version.json y /health
 ARG APP_VERSION=dev
 RUN echo "$APP_VERSION" | grep -Eq '^[A-Za-z0-9._-]+$' \
     || { echo "APP_VERSION inválida: solo se permiten letras, números, punto, guion y guion bajo" >&2; exit 1; } \
-    && printf '{"version":"%s"}\n' "$APP_VERSION" > dist/frontend/browser/version.json
+    && printf '{"version":"%s"}\n' "$APP_VERSION" > dist/frontend/browser/version.json \
+    && printf '{"status":"ok","version":"%s"}\n' "$APP_VERSION" > dist/frontend/browser/health.json
 
 # Etapa 2: nginx sin privilegios (usuario nginx, puerto 8080)
 FROM nginxinc/nginx-unprivileged:1.27-alpine

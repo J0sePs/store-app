@@ -5,8 +5,8 @@
 
 ## Estado actual
 
-- **Change activo:** ninguno (`infra-aws-terraform` terminado, archivado y con commit)
-- **Siguiente paso:** proponer `gitops-manifests` (`change-5`, repo `../store-gitops`) con `/openspec-propose gitops-manifests` y el prompt de `docs/prompts.md`, cuando el humano lo pida. `terraform plan/apply` los decide y ejecuta el humano.
+- **Change activo:** ninguno (`gitops-manifests` terminado, archivado y con commit en ambos repos)
+- **Siguiente paso:** proponer `ci-github-actions` (`change-6`) con `/openspec-propose ci-github-actions` y el prompt de `docs/prompts.md`, cuando el humano lo pida. `git push` de ambos repos pendiente de confirmación.
 - **Verificación del entorno:** `./init.sh`
 
 ## Plantilla por change
@@ -159,4 +159,34 @@
 ### Siguiente paso
 - `git push` pendiente de confirmación del humano.
 - Proponer `gitops-manifests` (repo `../store-gitops`, que ya tiene acceso de escritura).
+
+## 2026-11-17 — gitops-manifests
+
+### Qué se hizo
+- En `../store-gitops` (repo aparte, sin commits todavía): `apps/{frontend,products-service,orders-service,products-db,orders-db}` con su `kustomization.yaml`, `argocd/root-app.yaml` (app-of-apps) y `argocd/apps/*.yaml` (una Application por componente: `automated`, `prune`, `selfHeal`, `CreateNamespace=true`, finalizador, namespace `store`), `.gitignore` y `README.md` en español.
+- Deployments con probes en `/health`, requests/limits, `RollingUpdate` sin corte (`maxUnavailable: 0`), `securityContext` sin root; frontend 2 réplicas y servicios 1 (evita el choque de migración/siembra al primer arranque). Services: frontend `LoadBalancer` (80 → 8080), `products-service:8000` y `orders-service:8080` `ClusterIP`.
+- `APP_VERSION` = tag de la imagen: bloque `replacements` de Kustomize que copia el tag del campo `image` (ya transformado por `images`). Imágenes por nombre lógico con `newName` de marcador (`000000000000.dkr.ecr.us-east-1.amazonaws.com/<nombre>`) y `newTag: "0000000"`.
+- Bases de datos: StatefulSet `postgres:16-alpine` (uid 70, `PGDATA` en subdirectorio, `pg_isready`), PVC `gp3` de 5Gi y Service headless. Credenciales fuera de git: Secrets `products-db-credentials` y `orders-db-credentials` (`POSTGRES_PASSWORD` y `DATABASE_URL`) que se crean con `kubectl create secret` (comandos en el README).
+- En `store-app`: el frontend ahora expone `GET /health` (`{"status":"ok","version":"<APP_VERSION>"}`, sin depender de los servicios) mediante `health.json` generado en el Dockerfile y `location = /health` en nginx; documentado en `frontend/README.md`.
+
+### Evidencia
+- **No se ejecutó `kubectl apply` ni nada contra ningún clúster.**
+- `kubectl kustomize` correcto en los 5 componentes; 79 comprobaciones estáticas OK (probes, recursos, runAsNonRoot, `gp3`, headless, tipos de Service, Secrets, aislamiento entre bases, `APP_VERSION` == tag); 36 comprobaciones OK sobre las Applications (campos, `repoURL` igual al remoto de `store-gitops`).
+- Contrato con la CI con el CLI real (`kustomize` v5.8.1, copia temporal): `kustomize edit set image` solo toca `images`, `APP_VERSION` sigue al tag y los tags que parecen números (`1234567`, `1234e56`) se entrecomillan solos. Efecto colateral: `kustomize edit` reformatea el archivo y elimina sus comentarios (documentado en el README).
+- PostgreSQL arranca en Docker con las mismas restricciones del StatefulSet (uid 70, `--cap-drop ALL`, `no-new-privileges`, `PGDATA` en subdirectorio).
+- Frontend: `docker build` con `APP_VERSION=abc1234` → `/health` `{"status":"ok","version":"abc1234"}` con `no-store`; sin argumento → `dev`; responde 200 con los upstream caídos (mientras `/api/products` da 502). `npm test` 37 passed; `docker compose config` correcto.
+- Sin `kind: Secret`, `latest`, `AKIA`/`ghp_` ni contraseñas en `store-gitops`; los comandos del README pasan `bash -n` y no llevan valores literales.
+- `openspec validate gitops-manifests` → válido; `./init.sh` → código 0.
+- Specs sincronizados a `openspec/specs/` (`k8s-workloads`, `k8s-databases`, `argocd-applications`, `gitops-operations` y el requisito de health en `frontend-proxy`) y change archivado en `openspec/changes/archive/2026-11-17-gitops-manifests/`.
+
+### Decisiones y notas para los siguientes changes
+- **Orden de despliegue (lo hace el humano):** `kubectl create namespace store` y los dos Secrets → push de `store-gitops` a GitHub (`main`) → `kubectl apply -f argocd/root-app.yaml`. Hasta que la CI publique la primera imagen los pods de aplicación quedan en `ImagePullBackOff`; es lo esperado.
+- **`ci-github-actions`:** en `apps/<nombre>` ejecutar `kustomize edit set image "$NAME=$ECR_REGISTRY/$NAME:$SHORT_SHA"` (nunca `sed`, nunca `kubectl apply`, nunca `latest`) y hacer commit en `store-gitops` con el token `GITOPS_TOKEN`. Añadir `ARG APP_VERSION` al build del frontend (ya lo soporta) y a los Dockerfile de los servicios (pendiente: hoy los servicios leen `APP_VERSION` del entorno que pone el Deployment, así que en Kubernetes ya muestran el tag correcto sin tocar la imagen).
+- `repoURL` de las Applications: `https://github.com/J0sePs/store-gitops.git` (remoto actual); si cambia, el README indica el `sed` de 6 archivos.
+- El contexto actual de `kubectl` apunta a un clúster antiguo que ya no existe (`app-nube-2-dev-eks`): tras el `apply` de Terraform ejecutar `aws eks update-kubeconfig --name store-eks --region us-east-1` antes de cualquier `kubectl`.
+- Frontend como `LoadBalancer` clásico (sin anotaciones); cada base solo puede reprogramarse en nodos de la zona de su volumen EBS.
+
+### Siguiente paso
+- `git push` de `store-app` y de `store-gitops` pendiente de confirmación del humano (`store-gitops` tiene su primer commit).
+- Proponer `ci-github-actions`.
 

@@ -55,8 +55,8 @@
       "dependencies": [
         "change-4"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "done",
+      "evidence": "kubectl kustomize OK en los 5 componentes de ../store-gitops; 79 comprobaciones estáticas OK (probes /health, requests/limits, runAsNonRoot, PVC gp3 5Gi, Service headless, tipos de Service, DATABASE_URL desde Secret, aislamiento entre BD, APP_VERSION == tag); kustomize edit set image (CLI real v5.8.1, copia temporal) cambia solo images y APP_VERSION sigue al tag, incluidos tags numéricos; 36 comprobaciones OK de las 6 Applications de Argo CD; sin kind Secret, latest, AKIA/ghp_ ni contraseñas en store-gitops; PostgreSQL arranca en Docker con uid 70 y sin capabilities; frontend /health 200 con servicios caídos (docker build, abc1234 y dev); npm test 37 passed; openspec validate gitops-manifests válido; ./init.sh exit 0. NO se ejecutó kubectl apply ni nada contra el clúster; archivado en openspec/changes/archive/2026-11-17-gitops-manifests; main specs k8s-workloads, k8s-databases, argocd-applications y gitops-operations, y requisito de health en frontend-proxy"
     },
     {
       "id": "change-6",
