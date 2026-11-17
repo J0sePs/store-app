@@ -5,8 +5,8 @@
 
 ## Estado actual
 
-- **Change activo:** ninguno (`products-service-fastapi` terminado, archivado y con commit)
-- **Siguiente paso:** proponer `orders-service-go` (`change-2`) con `/openspec-propose orders-service-go` y el prompt de `docs/prompts.md`, cuando el humano lo pida.
+- **Change activo:** ninguno (`orders-service-go` terminado, archivado y con commit)
+- **Siguiente paso:** proponer `frontend-angular` (`change-3`, incluye `docker-compose.yml`) con `/openspec-propose frontend-angular` y el prompt de `docs/prompts.md`, cuando el humano lo pida.
 - **Verificación del entorno:** `./init.sh`
 
 ## Plantilla por change
@@ -75,3 +75,29 @@
 ### Siguiente paso
 - Proponer `orders-service-go` (necesita Go en el `PATH`: ya agregado a `~/.zshrc`).
 - `git push` pendiente de confirmación del humano.
+
+## 2026-11-17 — orders-service-go
+
+### Qué se hizo
+- Se creó `orders-service/` en Go con chi v5 y pgx v5: `GET /orders`, `GET /orders/{id}`, `POST /orders` y `GET /health` (versión desde `APP_VERSION`, por defecto `dev`), puerto 8080.
+- Modelo `Order` (`id`, `product_id` como simple referencia, `quantity`, `customer`, `status`, `created_at`); `status` lo fija el servicio en `pending`. Migración SQL embebida e idempotente al arrancar, con reintento de conexión (5 intentos, 2 s) y apagado ordenado.
+- Layout `cmd/server` + `internal/{config,handler,model,repository}`; el handler depende de la interfaz `OrderStore`, así que los tests usan un fake con `httptest`.
+- `Dockerfile` multi-stage con imagen final distroless (usuario 65532, sin shell) y `README.md` en español.
+
+### Evidencia
+- `go test ./...` → ok en `config`, `model` y `handler`; `gofmt -l .` y `go vet ./...` sin hallazgos.
+- `docker build -t orders-service:dev orders-service/` → OK (12,6 MB); usuario `65532:65532`; `docker run --entrypoint sh` falla (no hay shell).
+- Contra `postgres:16-alpine` (contenedores y red temporales, ya eliminados) con un contenedor `curl` en la misma red: `/health` 200; `GET /orders` → `[]`; `POST` → 201 con `status` `pending` aunque el cliente mandó `shipped`; `/orders/9999` → 404; `/orders/abc` → 400; `quantity` 0 → 400; tras reiniciar el pedido sigue ahí; el servicio se apaga con mensaje en español.
+- Sin `DATABASE_URL` el binario sale con código 1 y `falta la variable de entorno DATABASE_URL`.
+- `openspec validate orders-service-go` → válido; `./init.sh` → código 0 (ejecuta pytest y go test).
+- Spec sincronizado a `openspec/specs/orders-management/` y change archivado en `openspec/changes/archive/2026-11-17-orders-service-go/`.
+
+### Decisiones y notas
+- `go.mod` quedó en `go 1.25` (no 1.24 como en el diseño original): `pgx/v5` y `x/sync`/`x/text` lo exigen. Se actualizaron design y tasks y la imagen de build es `golang:1.25-alpine`.
+- Formato de error `{"error": "..."}` en este servicio frente a `{"detail": "..."}` en `products-service`: el frontend debe leer ambos.
+- El repositorio pgx no tiene tests automáticos; se validó contra PostgreSQL real con Docker.
+- Se borró un binario `orders-service/server` suelto que dejó un `go build ./cmd/server`; usar `-o bin/server`.
+
+### Siguiente paso
+- `git push` pendiente de confirmación del humano.
+- Proponer `frontend-angular` (necesita `node`/`npm`; Angular CLI se instalará como dependencia del proyecto).

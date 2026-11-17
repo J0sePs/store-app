@@ -25,8 +25,8 @@
       "dependencies": [
         "change-1"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "done",
+      "evidence": "go test ./...: ok (config, model, handler con httptest); gofmt -l . y go vet ./... sin hallazgos; docker build orders-service:dev OK (12,6 MB, usuario 65532:65532, sin shell); verificado contra postgres:16-alpine en contenedores temporales: /health 200, GET /orders [] , POST 201 con status pending (status del cliente ignorado), /orders/9999 404, /orders/abc 400, POST quantity 0 -> 400, pedido persiste tras reiniciar, apagado ordenado; sin DATABASE_URL sale con código 1; openspec validate orders-service-go válido; ./init.sh exit 0; archivado en openspec/changes/archive/2026-11-17-orders-service-go; main spec orders-management"
     },
     {
       "id": "change-3",
