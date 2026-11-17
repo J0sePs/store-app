@@ -5,8 +5,8 @@
 
 ## Estado actual
 
-- **Change activo:** ninguno (`frontend-angular` terminado, archivado y con commit)
-- **Siguiente paso:** proponer `infra-aws-terraform` (`change-4`, incluye `infra/terraform/argocd`) con `/openspec-propose infra-aws-terraform` y el prompt de `docs/prompts.md`, cuando el humano lo pida. `terraform apply` siempre con confirmación.
+- **Change activo:** ninguno (`infra-aws-terraform` terminado, archivado y con commit)
+- **Siguiente paso:** proponer `gitops-manifests` (`change-5`, repo `../store-gitops`) con `/openspec-propose gitops-manifests` y el prompt de `docs/prompts.md`, cuando el humano lo pida. `terraform plan/apply` los decide y ejecuta el humano.
 - **Verificación del entorno:** `./init.sh`
 
 ## Plantilla por change
@@ -131,4 +131,32 @@
 ### Siguiente paso
 - `git push` pendiente de confirmación del humano.
 - Proponer `infra-aws-terraform` (necesita `terraform`, `aws`, `kubectl`: ya instalados; `terraform apply` siempre con confirmación).
+
+## 2026-11-17 — infra-aws-terraform
+
+### Qué se hizo
+- Se creó `infra/terraform/` (región `us-east-1`) con módulos oficiales `terraform-aws-modules`: VPC 6.8.0 (2 AZ, un NAT, etiquetas de balanceador), EKS 21.30.2 (Kubernetes 1.36, 2 × t3.medium AL2023 en subredes privadas, administrador para quien crea el clúster, endpoint público limitado por variable), ECR 3.2.1 (3 repos con escaneo al subir, `force_delete` y ciclo de vida de 10 imágenes, etiquetas mutables), e IAM 6.11.1 (rol IRSA del driver EBS CSI, proveedor OIDC de GitHub opcional y rol de CI).
+- El rol de CI solo se asume desde `repo:<github_owner>/<github_repository>:ref:refs/heads/<github_branch>` (igualdad exacta) y solo puede subir/consultar imágenes de los 3 ECR (más `ecr:GetAuthorizationToken`); sin permisos sobre EKS ni IAM.
+- El addon EBS CSI es un `aws_eks_addon` aparte del módulo EKS para evitar una dependencia circular con el OIDC del clúster (design y tasks actualizados antes de codificar).
+- Etapa `infra/terraform/argocd/` con estado propio: `helm_release` de `argo-cd` (chart 10.17.2, Service `ClusterIP`), StorageClass `gp3` por defecto (`ebs.csi.aws.com`, `WaitForFirstConsumer`) y `gp2` sin marca de predeterminada. Autenticación de `helm` y `kubernetes` con `aws eks get-token`.
+- `variables.tf`, `outputs.tf` (`cluster_name`, `region`, `ecr_repository_urls`, `github_actions_role_arn`, `update_kubeconfig_command`), `terraform.tfvars.example` en ambas etapas, `.terraform.lock.hcl` versionados y `infra/terraform/README.md` en español (pasos de apply y destroy, costo ≈ 0,24 USD/h sin balanceadores y ≈ 0,27 USD/h con el del frontend, advertencia de borrar Services `LoadBalancer` y PVC antes del destroy).
+
+### Evidencia
+- **No se ejecutó `terraform plan`, `apply` ni `destroy`; no se creó ni modificó ningún recurso en AWS.** Solo `terraform init -backend=false`, `fmt` y `validate`.
+- `terraform validate` → válido en `infra/terraform` y en `infra/terraform/argocd`; `terraform fmt -check -recursive` sin cambios pendientes.
+- Búsqueda de `AKIA`, `aws_secret_access_key` y `password =` en `infra/` → sin coincidencias; `git check-ignore` confirma que `terraform.tfvars`, `*.tfstate*`, `*.tfplan` y `.terraform/` quedan ignorados y `.terraform.lock.hcl` y `terraform.tfvars.example` no.
+- Sujeto OIDC exacto, sin comodines, sin `eks:*` ni `iam:*`; outputs sin secretos; ninguna carpeta contiene manifiestos de la aplicación.
+- `openspec validate infra-aws-terraform` → válido; `./init.sh` → código 0.
+- Specs sincronizados a `openspec/specs/` (`eks-cluster`, `container-registry`, `cluster-storage`, `github-oidc-access`, `argocd-install`, `infra-conventions`) y change archivado en `openspec/changes/archive/2026-11-17-infra-aws-terraform/`.
+
+### Decisiones y notas para los siguientes changes
+- **Antes del apply (lo hace el humano):** `cp terraform.tfvars.example terraform.tfvars` y poner `github_owner`; revisar con `terraform plan`. Si la cuenta ya tiene el proveedor OIDC de GitHub, `create_github_oidc_provider = false`.
+- **`gitops-manifests`:** la StorageClass se llama `gp3` (PVC con `storageClassName: gp3`); los Services deben llamarse `products-service` y `orders-service` (nginx los resuelve al arrancar); el frontend escucha en el 8080 y se expone con un Service `LoadBalancer`; las imágenes viven en `<cuenta>.dkr.ecr.us-east-1.amazonaws.com/{frontend,products-service,orders-service}`.
+- **`ci-github-actions`:** usa el rol `github_actions_role_arn` por OIDC (permiso `id-token: write`); ECR acepta etiquetas mutables pero `latest` sigue prohibida; falta `ARG APP_VERSION` en los Dockerfile de los servicios.
+- **Capacidad:** 2 × t3.medium admiten ~34 pods en total (kube-system + EBS CSI + Argo CD + la aplicación): poco margen.
+- El estado de Terraform es local; no borrar `terraform.tfstate`.
+
+### Siguiente paso
+- `git push` pendiente de confirmación del humano.
+- Proponer `gitops-manifests` (repo `../store-gitops`, que ya tiene acceso de escritura).
 

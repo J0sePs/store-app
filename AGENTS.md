@@ -10,7 +10,7 @@ Proyecto académico: sistema de **microservicios** desplegado en **AWS EKS** con
   `/api/products/` → `products-service:8000` y `/api/orders/` → `orders-service:8080`.
 - `products-service/` — Python + FastAPI + SQLAlchemy, con su propia PostgreSQL (`products-db`).
 - `orders-service/` — Go + chi + pgx, con su propia PostgreSQL (`orders-db`).
-- `infra/terraform/` — VPC, EKS, ECR, EBS CSI, OIDC de GitHub; `infra/terraform/argocd/` instala Argo CD.
+- `infra/terraform/` — VPC, EKS, ECR, EBS CSI, OIDC de GitHub; `infra/terraform/argocd/` instala Argo CD y la StorageClass `gp3`.
 - `.github/workflows/` — CI: test → build → push a ECR → actualiza el repo `store-gitops`.
 - `../store-gitops/` — **otro repositorio git** (repo DevOps) con los manifiestos Kustomize y las Applications de Argo CD.
 

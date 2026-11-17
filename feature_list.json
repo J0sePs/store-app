@@ -45,8 +45,8 @@
       "dependencies": [
         "change-3"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "done",
+      "evidence": "SOLO código; NO se ejecutó plan, apply ni destroy. terraform init -backend=false + terraform validate: válido en infra/terraform y en infra/terraform/argocd; terraform fmt -check -recursive sin cambios pendientes; búsqueda de AKIA/aws_secret_access_key/password sin coincidencias; .gitignore cubre tfvars, tfstate, tfplan y .terraform/ y no ignora .terraform.lock.hcl ni tfvars.example; sujeto OIDC exacto repo:<owner>/<repo>:ref:refs/heads/<branch> sin comodines, sin acciones eks:* ni iam:*; módulos vpc 6.8.0, eks 21.30.2, ecr 3.2.1, iam 6.11.1; openspec validate infra-aws-terraform válido; ./init.sh exit 0; archivado en openspec/changes/archive/2026-11-17-infra-aws-terraform; main specs eks-cluster, container-registry, cluster-storage, github-oidc-access, argocd-install e infra-conventions"
     },
     {
       "id": "change-5",

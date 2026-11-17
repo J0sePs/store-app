@@ -1,0 +1,14 @@
+# Copia este archivo a terraform.tfvars (git lo ignora) y ajusta los valores.
+#   cp terraform.tfvars.example terraform.tfvars
+
+region       = "us-east-1"
+cluster_name = "store-eks"
+
+# Obligatorio: tu usuario u organización de GitHub (dueño de store-app)
+github_owner = "your-github-user"
+
+# Recomendado: limita el endpoint público del clúster a tu IP
+# cluster_endpoint_public_access_cidrs = ["203.0.113.4/32"]
+
+# Pon false si tu cuenta de AWS ya tiene el proveedor OIDC de GitHub
+# create_github_oidc_provider = false

@@ -1,0 +1,9 @@
+# Copia este archivo a terraform.tfvars (git lo ignora) y ajusta los valores si cambiaste algo
+# en la etapa principal.
+#   cp terraform.tfvars.example terraform.tfvars
+
+region       = "us-east-1"
+cluster_name = "store-eks"
+
+# argocd_namespace     = "argocd"
+# argocd_chart_version = "10.17.2"
