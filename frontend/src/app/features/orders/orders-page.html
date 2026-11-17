@@ -1,0 +1,74 @@
+<section class="page">
+  <h2>Pedidos</h2>
+
+  @if (loadError(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  } @else if (loading()) {
+    <p>Cargando pedidos…</p>
+  } @else if (orders().length === 0) {
+    <p class="empty">No hay pedidos todavía</p>
+  } @else {
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">ID</th>
+          <th scope="col">Producto</th>
+          <th scope="col">Cantidad</th>
+          <th scope="col">Cliente</th>
+          <th scope="col">Estado</th>
+          <th scope="col">Creado</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (order of orders(); track order.id) {
+          <tr>
+            <td>{{ order.id }}</td>
+            <td>{{ productName(order.product_id) }}</td>
+            <td>{{ order.quantity }}</td>
+            <td>{{ order.customer }}</td>
+            <td>{{ order.status }}</td>
+            <td>{{ order.created_at | date: 'dd/MM/yyyy HH:mm' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  <h3>Nuevo pedido</h3>
+  @if (!loading() && !loadError() && products().length === 0) {
+    <p class="empty">Primero crea un producto</p>
+  } @else {
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="field">
+        <label for="order-product">Producto</label>
+        <select id="order-product" formControlName="product_id">
+          <option [ngValue]="null" disabled>Elige un producto</option>
+          @for (product of products(); track product.id) {
+            <option [ngValue]="product.id">{{ product.name }}</option>
+          }
+        </select>
+        @if (form.controls.product_id.touched && form.controls.product_id.invalid) {
+          <small class="error">Elige un producto</small>
+        }
+      </div>
+      <div class="field">
+        <label for="order-quantity">Cantidad</label>
+        <input id="order-quantity" type="number" step="1" formControlName="quantity" />
+        @if (form.controls.quantity.touched && form.controls.quantity.invalid) {
+          <small class="error">La cantidad debe ser un entero mayor que 0</small>
+        }
+      </div>
+      <div class="field">
+        <label for="order-customer">Cliente</label>
+        <input id="order-customer" type="text" formControlName="customer" />
+        @if (form.controls.customer.touched && form.controls.customer.invalid) {
+          <small class="error">El cliente es obligatorio</small>
+        }
+      </div>
+      @if (formError(); as message) {
+        <p class="error" role="alert">{{ message }}</p>
+      }
+      <button type="submit" [disabled]="form.invalid || saving()">Crear pedido</button>
+    </form>
+  }
+</section>

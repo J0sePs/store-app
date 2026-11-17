@@ -22,6 +22,17 @@ Muestra la versión de `git`, `docker`, `node`, `python3`, `go`, `terraform`, `a
 
 **Al cerrar un change:** actualiza `status` y `evidence` en `feature_list.json` y agrega una sección a `progress.md`.
 
+## Ejecutar todo en local
+
+Levanta el frontend, los dos servicios y sus bases de datos con `docker compose` (no necesita AWS):
+
+```bash
+cp .env.example .env        # contraseñas y versiones de ejemplo; .env no se sube a git
+docker compose up --build
+```
+
+Abre http://localhost (cambia el puerto con `FRONTEND_PORT` en `.env` si el 80 está ocupado). Solo el frontend se publica al host; nginx enruta `/api/products` y `/api/orders` a cada servicio. Para detener todo y borrar los datos: `docker compose down -v`.
+
 ## Orden de los changes
 
 1. `bootstrap-harness`

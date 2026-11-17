@@ -35,8 +35,8 @@
       "dependencies": [
         "change-2"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "done",
+      "evidence": "npm test -- --watch=false: 37 passed (Vitest+jsdom); npm run lint y npm run build sin errores; nginx -t OK; docker build frontend OK (usuario 101, /version.json {\"version\":\"abc1234\"} con no-store, dev por defecto, APP_VERSION inválida rechazada); docker compose up --build con 5 servicios: / y /orders 200, /api/products y /api/orders (GET/POST) por el proxy, /health de ambos 200, datos persisten tras restart; PRODUCTS_APP_VERSION=2.0.0 visible en /api/products/health y en el pie de página (Chromium headless); sin .env compose falla en español; openspec validate frontend-angular válido; ./init.sh exit 0; archivado en openspec/changes/archive/2026-11-17-frontend-angular; main specs store-frontend, frontend-proxy y local-stack"
     },
     {
       "id": "change-4",

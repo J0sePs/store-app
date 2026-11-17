@@ -1,0 +1,67 @@
+# Sistema completo en local, sin AWS. Uso:
+#   cp .env.example .env
+#   docker compose up --build
+# y abre http://localhost (o el puerto de FRONTEND_PORT).
+name: store
+
+services:
+  products-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: products
+      POSTGRES_USER: products
+      POSTGRES_PASSWORD: "${PRODUCTS_DB_PASSWORD:?Falta PRODUCTS_DB_PASSWORD: copia .env.example a .env}"
+    volumes:
+      - products-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U products -d products"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  products-service:
+    build: ./products-service
+    environment:
+      DATABASE_URL: "postgresql+psycopg://products:${PRODUCTS_DB_PASSWORD:?Falta PRODUCTS_DB_PASSWORD: copia .env.example a .env}@products-db:5432/products"
+      APP_VERSION: ${PRODUCTS_APP_VERSION:-dev}
+    depends_on:
+      products-db:
+        condition: service_healthy
+
+  orders-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: orders
+      POSTGRES_USER: orders
+      POSTGRES_PASSWORD: "${ORDERS_DB_PASSWORD:?Falta ORDERS_DB_PASSWORD: copia .env.example a .env}"
+    volumes:
+      - orders-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orders -d orders"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  orders-service:
+    build: ./orders-service
+    environment:
+      DATABASE_URL: "postgres://orders:${ORDERS_DB_PASSWORD:?Falta ORDERS_DB_PASSWORD: copia .env.example a .env}@orders-db:5432/orders?sslmode=disable"
+      APP_VERSION: ${ORDERS_APP_VERSION:-dev}
+    depends_on:
+      orders-db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        APP_VERSION: ${FRONTEND_APP_VERSION:-dev}
+    ports:
+      - "${FRONTEND_PORT:-80}:8080"
+    depends_on:
+      - products-service
+      - orders-service
+
+volumes:
+  products-db-data:
+  orders-db-data:

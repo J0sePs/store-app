@@ -1,0 +1,160 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1f2933;
+  --muted: #52606d;
+  --border: #d9dee3;
+  --primary: #1d4ed8;
+  --primary-text: #ffffff;
+  --error: #b42318;
+  --footer-height: 2.75rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding-bottom: var(--footer-height);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.topbar a {
+  padding: 0.25rem 0.5rem;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.topbar a.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+
+.banner-slot:empty {
+  display: none;
+}
+
+.content {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+h2,
+h3 {
+  margin: 0 0 1rem;
+}
+
+h3 {
+  margin-top: 2rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+th,
+td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  background: #eef1f5;
+  font-weight: 600;
+}
+
+form {
+  display: grid;
+  gap: 1rem;
+  max-width: 24rem;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+label {
+  font-weight: 600;
+}
+
+input,
+select {
+  padding: 0.5rem;
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--primary-text);
+  background: var(--primary);
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error {
+  color: var(--error);
+}
+
+.empty {
+  color: var(--muted);
+}
+
+.version-footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  height: var(--footer-height);
+  align-items: center;
+  font-size: 0.875rem;
+  color: var(--muted);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}

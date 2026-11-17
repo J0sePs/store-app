@@ -5,8 +5,8 @@
 
 ## Estado actual
 
-- **Change activo:** ninguno (`orders-service-go` terminado, archivado y con commit)
-- **Siguiente paso:** proponer `frontend-angular` (`change-3`, incluye `docker-compose.yml`) con `/openspec-propose frontend-angular` y el prompt de `docs/prompts.md`, cuando el humano lo pida.
+- **Change activo:** ninguno (`frontend-angular` terminado, archivado y con commit)
+- **Siguiente paso:** proponer `infra-aws-terraform` (`change-4`, incluye `infra/terraform/argocd`) con `/openspec-propose infra-aws-terraform` y el prompt de `docs/prompts.md`, cuando el humano lo pida. `terraform apply` siempre con confirmación.
 - **Verificación del entorno:** `./init.sh`
 
 ## Plantilla por change
@@ -101,3 +101,34 @@
 ### Siguiente paso
 - `git push` pendiente de confirmación del humano.
 - Proponer `frontend-angular` (necesita `node`/`npm`; Angular CLI se instalará como dependencia del proyecto).
+
+## 2026-11-17 — frontend-angular
+
+### Qué se hizo
+- Se creó `frontend/` con Angular 22 (standalone, Vitest + jsdom, `angular-eslint`): `products-page` (tabla y alta), `orders-page` (tabla y alta con selector de producto; el nombre se resuelve en el frontend), `version-footer` (Frontend, Productos y Pedidos con `no disponible`, consulta cada 30 s) y `app-shell`. Texto visible en español, componentes en inglés.
+- `core/`: modelos tipados, servicios HTTP con rutas relativas (`/api/products`, `/api/orders`, `/health` de cada uno), `VersionService` y `toUserMessage`, que normaliza `{"detail": ...}` (products) y `{"error": ...}` (orders).
+- `nginx.conf` (+ `proxy_params.inc`): SPA con fallback, proxy que quita `/api`, `location =` para los `/health`, `/api/...` desconocido → 404, `version.json` sin caché. `Dockerfile` multi-stage con `nginx-unprivileged` (usuario 101, puerto 8080) y `ARG APP_VERSION` validado.
+- `docker-compose.yml` (frontend, products-service, products-db, orders-service, orders-db) y `.env.example`; las contraseñas vienen de `.env` (ignorado por git) y compose falla en español si faltan.
+- `README.md` del frontend y de la raíz con la sección "Ejecutar todo en local".
+
+### Evidencia
+- `npm test -- --watch=false` → 37 passed; `npm run lint` y `npm run build` sin errores.
+- `nginx -t` con la imagen oficial → correcto. `docker build --build-arg APP_VERSION=abc1234` → `/version.json` = `{"version":"abc1234"}` con `Cache-Control: no-store`; sin argumento → `dev`; `APP_VERSION='a"b'` → build falla con mensaje en español; usuario 101.
+- `docker compose up --build -d`: `/` y `/orders` 200; `GET/POST /api/products` y `/api/orders` por el proxy (201, 404, 400 correctos); `/api/products/health` y `/api/orders/health` 200; tras `docker compose restart` quedan 1 pedido y 4 productos.
+- Con `PRODUCTS_APP_VERSION=2.0.0`: `/api/products/health` → `2.0.0` y el pie de página real (Chromium headless) muestra `Productos: 2.0.0`. Capturas de `/products` y `/orders` revisadas.
+- `docker compose config` sin `.env` falla con `Falta PRODUCTS_DB_PASSWORD: copia .env.example a .env`; `git check-ignore .env` → ignorado y `.env.example` no.
+- `openspec validate frontend-angular` → válido; `./init.sh` → código 0 (pytest, go test y tests del frontend).
+- Contenedores, volúmenes y el `.env` de prueba se eliminaron (`docker compose down -v`).
+- Specs sincronizados a `openspec/specs/` (`store-frontend`, `frontend-proxy`, `local-stack`) y change archivado en `openspec/changes/archive/2026-11-17-frontend-angular/`.
+
+### Decisiones y notas
+- Primer arranque local: `cp .env.example .env` y `docker compose up --build` (no hay contraseñas por defecto en git).
+- Para el change de CI: los Dockerfile de `products-service` y `orders-service` aún no reciben `ARG APP_VERSION`; sin eso el pie mostrará `dev` para los servicios en Kubernetes. El frontend sí lo recibe como `--build-arg`.
+- Para `gitops-manifests`: nginx resuelve `products-service` y `orders-service` al arrancar, así que los Services de Kubernetes deben llamarse exactamente así; el contenedor del frontend escucha en el 8080.
+- Un `: ` sin comillas dentro de un valor YAML rompe el archivo (pasó en `docker-compose.yml`; sigue pendiente `openspec/config.yaml`, `rules.specs[1]`).
+- La tabla de productos usa `<th>` por columna y el shell tiene `.banner-slot` para el change `demo-visible-change`.
+
+### Siguiente paso
+- `git push` pendiente de confirmación del humano.
+- Proponer `infra-aws-terraform` (necesita `terraform`, `aws`, `kubectl`: ya instalados; `terraform apply` siempre con confirmación).
+
