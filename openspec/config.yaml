@@ -1,0 +1,52 @@
+schema: spec-driven
+
+context: |
+  Academic project: microservices system on AWS EKS with GitOps.
+  The full project rules are in AGENTS.md at the repo root.
+
+  Convenciones de idioma (obligatorio):
+  - EN INGLÉS: nombres de carpetas y archivos, código (variables, funciones, clases,
+    tipos), endpoints, campos JSON, tablas y columnas, recursos de Kubernetes y Terraform,
+    nombres de los changes de OpenSpec, ramas y mensajes de commit.
+  - EN ESPAÑOL: comentarios en el código, mensajes de log, mensajes de error que devuelve
+    la API, texto de la interfaz del frontend, README, documentación en docs/, contenido
+    de los artefactos de OpenSpec y tus respuestas en el chat.
+
+  Components (monorepo store-app):
+  - frontend/: Angular (standalone components) served by nginx. nginx reverse proxy:
+    /api/products/ -> products-service:8000, /api/orders/ -> orders-service:8080.
+  - products-service/: Python + FastAPI + SQLAlchemy, own PostgreSQL (products-db).
+  - orders-service/: Go + chi + pgx, own PostgreSQL (orders-db).
+  - Database-per-service: a service never accesses another service's database.
+  - Every service exposes GET /health returning {status, version}.
+  - Configuration via environment variables only (12-factor).
+  - docker-compose.yml at the root to run everything locally without AWS.
+
+  Infrastructure (infra/terraform): region us-east-1, VPC with a single NAT gateway,
+  EKS with a managed node group (2 x t3.medium), 3 ECR repositories, EBS CSI addon,
+  gp3 StorageClass, GitHub OIDC provider plus an IAM role for GitHub Actions,
+  Argo CD installed via helm_release in a separate stage (infra/terraform/argocd).
+
+  GitOps flow:
+  push to main -> GitHub Actions (test, build, push to ECR with tag = short SHA)
+  -> update the image in the store-gitops repo (kustomize edit set image) and commit
+  -> Argo CD detects the change and syncs to EKS -> nodes pull the image from ECR.
+  Forbidden: the latest tag, kubectl apply from CI, static AWS keys (use OIDC).
+
+  Kubernetes (store-gitops repo at ../store-gitops): Kustomize, namespace "store",
+  PostgreSQL as a StatefulSet with a gp3 PVC (one per service), probes on /health,
+  requests/limits set. DB secrets are NOT stored in git; document how to create them.
+
+rules:
+  proposal:
+    - Máximo 400 palabras. Indica qué componente de la arquitectura afecta.
+  specs:
+    - Requisitos con escenarios WHEN/THEN verificables.
+    - Para APIs: endpoints, códigos HTTP y esquema JSON (campos en inglés).
+  design:
+    - Incluye un diagrama Mermaid del componente afectado.
+    - Justifica cada decisión técnica en 1-2 líneas.
+  tasks:
+    - Tareas pequeñas y verificables. Incluye tareas de tests y de README.
+    - Verifica que los nombres de archivos, carpetas e identificadores estén en inglés.
+    - No ejecutes terraform apply, terraform destroy ni git push sin pedirme confirmación.

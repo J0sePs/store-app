@@ -1,0 +1,82 @@
+{
+  "features": [
+    {
+      "id": "change-0",
+      "name": "bootstrap-harness",
+      "description": "Harness del proyecto: feature_list.json, progress.md, init.sh y regla de sesión en AGENTS.md",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "./init.sh → exit 0 (go no instalado: aviso; componentes aún inexistentes: omitidos); bash -n init.sh OK; openspec validate bootstrap-harness → válido; feature_list.json: 8 entradas, solo una in_progress verificado con copia temporal; archivado en openspec/changes/archive/2026-11-17-bootstrap-harness; main spec openspec/specs/project-harness/spec.md; go 1.27.4 instalado y ./init.sh sin faltantes"
+    },
+    {
+      "id": "change-1",
+      "name": "products-service-fastapi",
+      "description": "Servicio de productos en Python + FastAPI + SQLAlchemy con products-db, /health y tests con pytest",
+      "dependencies": [
+        "change-0"
+      ],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "change-2",
+      "name": "orders-service-go",
+      "description": "Servicio de pedidos en Go + chi + pgx con orders-db, /health y tests con httptest",
+      "dependencies": [
+        "change-1"
+      ],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "change-3",
+      "name": "frontend-angular",
+      "description": "Frontend Angular standalone servido con nginx (proxy a los servicios) e incluye docker-compose.yml",
+      "dependencies": [
+        "change-2"
+      ],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "change-4",
+      "name": "infra-aws-terraform",
+      "description": "Infraestructura AWS con Terraform: VPC, EKS, ECR, EBS CSI, OIDC de GitHub y etapa infra/terraform/argocd",
+      "dependencies": [
+        "change-3"
+      ],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "change-5",
+      "name": "gitops-manifests",
+      "description": "Manifiestos Kustomize y Applications de Argo CD en el repo ../store-gitops",
+      "dependencies": [
+        "change-4"
+      ],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "change-6",
+      "name": "ci-github-actions",
+      "description": "CI en GitHub Actions: test, build, push a ECR con tag SHA corto y actualización de store-gitops",
+      "dependencies": [
+        "change-5"
+      ],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "change-7",
+      "name": "demo-visible-change",
+      "description": "Cambio visible para la demo del flujo GitOps completo",
+      "dependencies": [
+        "change-6"
+      ],
+      "status": "pending",
+      "evidence": ""
+    }
+  ]
+}

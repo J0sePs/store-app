@@ -1,0 +1,39 @@
+# Terraform (el state guarda datos sensibles)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+crash.log
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+coverage/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Go
+orders-service/bin/
+*.test
+*.out
+
+# Entorno y secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store
+
+# Claude Code: configuración personal
+.claude/settings.local.json
