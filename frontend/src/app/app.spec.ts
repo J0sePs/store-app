@@ -41,6 +41,24 @@ describe('App', () => {
     expect(element.querySelector('h2')?.textContent).toBe('Pedidos');
   });
 
+  it('muestra el banner de la versión 2 en las vistas de productos y de pedidos', async () => {
+    const { fixture, element } = await crear();
+    const texto = () => element.querySelector('.banner-slot [role="status"]')?.textContent?.trim();
+    expect(texto()).toBe('Versión 2 - desplegada con GitOps');
+    const enlace = Array.from(element.querySelectorAll('nav a')).find((a) => a.textContent?.trim() === 'Pedidos');
+    (enlace as HTMLAnchorElement).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(element.querySelector('h2')?.textContent).toBe('Pedidos');
+    expect(texto()).toBe('Versión 2 - desplegada con GitOps');
+  });
+
+  it('el banner convive con el pie de página de versiones', async () => {
+    const { element } = await crear();
+    expect(element.querySelector('.banner-slot [role="status"]')).not.toBeNull();
+    expect(element.querySelector('footer')?.textContent).toContain('Frontend');
+  });
+
   it('muestra el pie de página con las versiones en todas las vistas', async () => {
     const { element } = await crear();
     expect(element.querySelector('footer')?.textContent).toContain('Frontend');

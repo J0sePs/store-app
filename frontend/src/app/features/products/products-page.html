@@ -13,6 +13,7 @@
         <tr>
           <th scope="col">ID</th>
           <th scope="col">Nombre</th>
+          <th scope="col">Categoría</th>
           <th scope="col">Precio</th>
           <th scope="col">Stock</th>
           <th scope="col">Creado</th>
@@ -23,6 +24,7 @@
           <tr>
             <td>{{ product.id }}</td>
             <td>{{ product.name }}</td>
+            <td>{{ product.category ?? '—' }}</td>
             <td>{{ product.price | number: '1.2-2' }}</td>
             <td>{{ product.stock }}</td>
             <td>{{ product.created_at | date: 'dd/MM/yyyy HH:mm' }}</td>
@@ -39,6 +41,13 @@
       <input id="product-name" type="text" formControlName="name" />
       @if (form.controls.name.touched && form.controls.name.invalid) {
         <small class="error">El nombre es obligatorio</small>
+      }
+    </div>
+    <div class="field">
+      <label for="product-category">Categoría (opcional)</label>
+      <input id="product-category" type="text" formControlName="category" />
+      @if (form.controls.category.touched && form.controls.category.invalid) {
+        <small class="error">La categoría puede tener hasta 100 caracteres</small>
       }
     </div>
     <div class="field">

@@ -2,7 +2,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { toUserMessage } from '../../core/errors/to-user-message';
-import { Product } from '../../core/models/product.model';
+import { CreateProductRequest, Product } from '../../core/models/product.model';
 import { ProductsService } from '../../core/services/products.service';
 import { integer, notBlank } from '../../shared/validators';
 
@@ -23,6 +23,7 @@ export class ProductsPage implements OnInit {
 
   protected readonly form = new FormGroup({
     name: new FormControl('', { nonNullable: true, validators: [Validators.required, notBlank] }),
+    category: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(100)] }),
     price: new FormControl<number | null>(null, [Validators.required, Validators.min(0.01)]),
     stock: new FormControl<number | null>(0, [Validators.required, Validators.min(0), integer]),
   });
@@ -45,13 +46,21 @@ export class ProductsPage implements OnInit {
       this.form.markAllAsTouched();
       return;
     }
-    const { name, price, stock } = this.form.getRawValue();
+    const { name, category, price, stock } = this.form.getRawValue();
     this.saving.set(true);
     this.formError.set(null);
-    this.productsService.create({ name: name.trim(), price: Number(price), stock: Number(stock) }).subscribe({
+    // La categoría es opcional: si está vacía no se envía y el servicio asigna "General"
+    const trimmedCategory = category.trim();
+    const request: CreateProductRequest = {
+      name: name.trim(),
+      price: Number(price),
+      stock: Number(stock),
+      ...(trimmedCategory ? { category: trimmedCategory } : {}),
+    };
+    this.productsService.create(request).subscribe({
       next: (created) => {
         this.products.update((list) => [...list, created]);
-        this.form.reset({ name: '', price: null, stock: 0 });
+        this.form.reset({ name: '', category: '', price: null, stock: 0 });
         this.saving.set(false);
       },
       error: (error: unknown) => {

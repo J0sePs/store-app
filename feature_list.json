@@ -75,8 +75,8 @@
       "dependencies": [
         "change-6"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "done",
+      "evidence": "NO se hizo push (lo hará el usuario grabando el video). products-service: pytest 37 passed (API con category y migración sobre una tabla creada con el DDL de la v1), ruff check/format OK; migración contra PostgreSQL 16 real con scripts/test-products-migration.sh (16 comprobaciones, también con otro commit): la v1 (commit 0688166) crea la tabla sin category con 5 filas -> la v2 añade la columna NOT NULL DEFAULT 'General', los 5 productos pasan a General y la huella de los datos no cambia -> reinicio idempotente -> la v1 vuelve a funcionar sobre la base migrada y su producto recibe General; frontend: npm test 45 passed, npm run lint y build OK; banner 'Versión 2 - desplegada con GitOps' y columna 'Categoría' verificados con Chromium headless en docker compose (también migrando una BD local que ya tenía la tabla v1); scripts/check-capacity.py sin cambios (17 de 22 pods, 46 % de memoria); el push disparará frontend.yml y products-service.yml (no orders-service.yml); sin datos sensibles; archivado en openspec/changes/archive/2026-11-18-demo-visible-change; specs products-catalog (3 requisitos modificados) y store-frontend (1 modificado y 1 nuevo)"
     },
     {
       "id": "change-8",

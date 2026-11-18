@@ -10,15 +10,16 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
+from app.db.migrations import ensure_category_column
 from app.models.product import Product
 
 logger = logging.getLogger("products-service")
 
 # Productos de ejemplo que se siembran solo si la tabla está vacía
-SEED_PRODUCTS: list[tuple[str, Decimal, int]] = [
-    ("Teclado mecánico", Decimal("45.90"), 25),
-    ("Mouse inalámbrico", Decimal("19.99"), 50),
-    ("Monitor 24 pulgadas", Decimal("139.00"), 10),
+SEED_PRODUCTS: list[tuple[str, str, Decimal, int]] = [
+    ("Teclado mecánico", "Periféricos", Decimal("45.90"), 25),
+    ("Mouse inalámbrico", "Periféricos", Decimal("19.99"), 50),
+    ("Monitor 24 pulgadas", "Monitores", Decimal("139.00"), 10),
 ]
 
 
@@ -38,7 +39,7 @@ def seed_products(session: Session) -> int:
     if total > 0:
         logger.info("La tabla de productos ya tiene %d registros; no se siembra", total)
         return 0
-    session.add_all(Product(name=n, price=p, stock=s) for n, p, s in SEED_PRODUCTS)
+    session.add_all(Product(name=n, category=c, price=p, stock=s) for n, c, p, s in SEED_PRODUCTS)
     session.commit()
     logger.info("Se sembraron %d productos de ejemplo", len(SEED_PRODUCTS))
     return len(SEED_PRODUCTS)
@@ -51,10 +52,12 @@ def init_db(
     delay: float = 2.0,
     sleep: Callable[[float], None] = time.sleep,
 ) -> None:
-    """Crea las tablas y siembra datos; reintenta si la base de datos aún no responde."""
+    """Crea las tablas, migra columnas nuevas y siembra datos; reintenta si la base no responde."""
     for attempt in range(1, attempts + 1):
         try:
             Base.metadata.create_all(engine)
+            # Una tabla creada por una versión anterior recibe aquí las columnas nuevas
+            ensure_category_column(engine)
             with session_factory() as session:
                 seed_products(session)
             return

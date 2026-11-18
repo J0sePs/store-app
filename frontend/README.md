@@ -4,7 +4,8 @@ Interfaz web de `store-app`, hecha con Angular (standalone components) y servida
 
 ## Qué incluye
 
-- **Productos:** tabla y formulario para crear (nombre, precio, stock).
+- **Banner de versión:** "Versión 2 - desplegada con GitOps", debajo de la barra superior y en todas las vistas (componente `release-banner`; el texto es la constante `RELEASE_BANNER_TEXT`).
+- **Productos:** tabla (con la columna "Categoría", que muestra `—` si el servicio no la envía) y formulario para crear (nombre, categoría opcional, precio, stock). Si la categoría se deja vacía no se envía y el servicio asigna `General`.
 - **Pedidos:** tabla y formulario para crear, eligiendo el producto de una lista. El nombre del producto se resuelve en el frontend, porque el pedido solo guarda `product_id` (si no está en la lista se muestra `Producto #id`).
 - **Pie de página:** versión del frontend y de cada servicio. Se actualiza solo cada 30 segundos y muestra `no disponible` si un servicio no responde.
 - **Errores:** se traducen a un único mensaje en español (`products-service` responde `{"detail": ...}` y `orders-service` `{"error": ...}`).
@@ -21,7 +22,8 @@ src/app/
 │   ├── products/      # products-page
 │   └── orders/        # orders-page
 └── shared/
-    ├── app-shell/     # navegación, contenido y pie
+    ├── app-shell/     # navegación, banner, contenido y pie
+    ├── release-banner/
     └── version-footer/
 ```
 

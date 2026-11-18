@@ -20,9 +20,29 @@ Si falta `DATABASE_URL`, el servicio termina al arrancar con el mensaje `Falta l
 | GET | `/products/{id}` | `200` producto, `404 {"detail": "Producto no encontrado"}`, `422` si el id no es entero |
 | POST | `/products` | `201` producto creado, `422` si los datos no son válidos |
 
-Producto: `id`, `name`, `price`, `stock`, `created_at`. En `POST`, `name` no puede estar vacío, `price` debe ser mayor que 0 y `stock` mayor o igual que 0.
+Producto: `id`, `name`, `category`, `price`, `stock`, `created_at`. En `POST`, `name` no puede estar vacío, `price` debe ser mayor que 0 y `stock` mayor o igual que 0. `category` es **opcional**: si se envía debe tener de 1 a 100 caracteres (se recortan los espacios; vacía o de solo espacios devuelve 422) y, si se omite, vale `General`.
 
-Al arrancar se crea la tabla `products` y, solo si está vacía, se siembran 3 productos de ejemplo.
+Al arrancar se crea la tabla `products`, se aplica la migración de `category` y, solo si la tabla está vacía, se siembran 3 productos de ejemplo (en instalaciones nuevas llevan categoría: `Periféricos`, `Periféricos` y `Monitores`).
+
+### Migración de la columna `category`
+
+`create_all` no añade columnas a una tabla que ya existe, así que al arrancar el servicio aplica una migración **idempotente** (`app/db/migrations.py`). En PostgreSQL ejecuta:
+
+```sql
+ALTER TABLE products ADD COLUMN IF NOT EXISTS category VARCHAR(100) NOT NULL DEFAULT 'General'
+```
+
+- Los productos que ya existían conservan todos sus datos y reciben `General`.
+- Es segura si el servicio se reinicia o si dos instancias arrancan a la vez, y con un valor por defecto constante solo modifica metadatos (no reescribe la tabla).
+- Como la columna tiene valor por defecto, la **versión anterior del servicio sigue funcionando** contra la base ya migrada (importante durante el rolling update y para un rollback).
+- En SQLite (solo en los tests) se comprueba la columna antes de añadirla, porque SQLite no admite `IF NOT EXISTS` en `ADD COLUMN`.
+
+Para probarla contra PostgreSQL real, con una base creada por la versión anterior (necesita Docker; usa contenedores temporales y limpia al terminar):
+
+```bash
+bash scripts/test-products-migration.sh            # versión anterior = commit 0688166
+bash scripts/test-products-migration.sh c1f527e   # otro commit con la versión anterior (sin category)
+```
 
 ```bash
 curl http://localhost:8000/health
@@ -70,11 +90,11 @@ Las credenciales reales no se guardan en git: se inyectan por variable de entorn
 
 ```
 app/
-├── main.py        # aplicación y arranque (crea tabla y siembra)
+├── main.py        # aplicación y arranque (crea tabla, migra y siembra)
 ├── config.py      # variables de entorno
 ├── api/           # rutas: products, health
 ├── models/        # modelos SQLAlchemy
 ├── schemas/       # esquemas Pydantic
-└── db/            # base, motor, sesión y siembra
+└── db/            # base, motor, sesión, migraciones y siembra
 tests/
 ```

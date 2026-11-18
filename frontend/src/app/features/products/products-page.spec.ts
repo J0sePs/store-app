@@ -8,6 +8,7 @@ import { ProductsPage } from './products-page';
 const productos: Product[] = [1, 2, 3].map((id) => ({
   id,
   name: `Producto ${id}`,
+  category: id === 3 ? 'Monitores' : 'Periféricos',
   price: id * 10,
   stock: id,
   created_at: '2026-01-01T10:00:00Z',
@@ -43,7 +44,77 @@ describe('ProductsPage', () => {
   it('tiene encabezados de columna en español', async () => {
     const { element } = await crear(() => of(productos));
     const encabezados = Array.from(element.querySelectorAll('th')).map((th) => th.textContent?.trim());
-    expect(encabezados).toEqual(['ID', 'Nombre', 'Precio', 'Stock', 'Creado']);
+    expect(encabezados).toEqual(['ID', 'Nombre', 'Categoría', 'Precio', 'Stock', 'Creado']);
+  });
+
+  it('muestra la categoría de cada producto', async () => {
+    const { element } = await crear(() => of(productos));
+    const celdas = Array.from(element.querySelectorAll('tbody tr')).map((tr) => tr.querySelectorAll('td')[2].textContent?.trim());
+    expect(celdas).toEqual(['Periféricos', 'Periféricos', 'Monitores']);
+  });
+
+  it('muestra "—" si el servicio no envía la categoría (versión anterior)', async () => {
+    const sinCategoria = productos.map((producto) => {
+      const copia: Partial<Product> = { ...producto };
+      delete copia.category;
+      return copia as Product;
+    });
+    const { element } = await crear(() => of(sinCategoria));
+    const celdas = Array.from(element.querySelectorAll('tbody tr')).map((tr) => tr.querySelectorAll('td')[2].textContent?.trim());
+    expect(celdas).toEqual(['—', '—', '—']);
+    expect(element.querySelectorAll('tbody tr')).toHaveLength(3);
+  });
+
+  it('crea un producto con categoría: la envía y la muestra en la fila nueva', async () => {
+    const nuevo: Product = { id: 4, name: 'Silla', category: 'Muebles', price: 80, stock: 3, created_at: '2026-01-02T10:00:00Z' };
+    const { element, create, fixture } = await crear(() => of(productos), vi.fn(() => of(nuevo)));
+
+    escribir(element, 'product-name', 'Silla');
+    escribir(element, 'product-category', '  Muebles ');
+    escribir(element, 'product-price', '80');
+    escribir(element, 'product-stock', '3');
+    fixture.detectChanges();
+    element.querySelector('form')!.dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(create).toHaveBeenCalledWith({ name: 'Silla', category: 'Muebles', price: 80, stock: 3 });
+    const filas = element.querySelectorAll('tbody tr');
+    expect(filas).toHaveLength(4);
+    expect(filas[3].querySelectorAll('td')[2].textContent?.trim()).toBe('Muebles');
+    expect(element.querySelector<HTMLInputElement>('#product-category')!.value).toBe('');
+  });
+
+  it('la categoría vacía no se envía en el cuerpo (el servicio asigna General)', async () => {
+    const nuevo: Product = { id: 4, name: 'Cable', category: 'General', price: 3.5, stock: 7, created_at: '2026-01-02T10:00:00Z' };
+    const { element, create, fixture } = await crear(() => of(productos), vi.fn(() => of(nuevo)));
+
+    escribir(element, 'product-name', 'Cable');
+    escribir(element, 'product-category', '   ');
+    escribir(element, 'product-price', '3.5');
+    escribir(element, 'product-stock', '7');
+    fixture.detectChanges();
+    element.querySelector('form')!.dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+
+    expect(create).toHaveBeenCalledTimes(1);
+    const cuerpo = create.mock.calls[0][0] as Record<string, unknown>;
+    expect(cuerpo).toEqual({ name: 'Cable', price: 3.5, stock: 7 });
+    expect('category' in cuerpo).toBe(false);
+  });
+
+  it('rechaza una categoría de más de 100 caracteres', async () => {
+    const { element, create, fixture } = await crear(() => of(productos));
+    escribir(element, 'product-name', 'Silla');
+    escribir(element, 'product-category', 'x'.repeat(101));
+    escribir(element, 'product-price', '80');
+    escribir(element, 'product-stock', '3');
+    fixture.detectChanges();
+    expect(element.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
+    element.querySelector('form')!.dispatchEvent(new Event('submit'));
+    fixture.detectChanges();
+    expect(create).not.toHaveBeenCalled();
+    expect(element.textContent).toContain('La categoría puede tener hasta 100 caracteres');
   });
 
   it('muestra un mensaje si no hay productos', async () => {

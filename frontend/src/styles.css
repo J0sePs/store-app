@@ -59,6 +59,15 @@ body {
   display: none;
 }
 
+/* Banner de versión de la demo */
+.release-banner {
+  padding: 0.6rem 1.5rem;
+  text-align: center;
+  font-weight: 600;
+  color: var(--primary-text);
+  background: var(--primary);
+}
+
 .content {
   max-width: 60rem;
   margin: 0 auto;

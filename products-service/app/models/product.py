@@ -16,6 +16,9 @@ class Product(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Valor por defecto en la base: así una versión anterior del servicio (sin este campo) sigue
+    # funcionando y la migración puede rellenar los productos existentes
+    category: Mapped[str] = mapped_column(String(100), nullable=False, server_default="General")
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     stock: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # La fecha la asigna la base de datos, no el cliente

@@ -45,6 +45,8 @@ def get_product(product_id: int, session: SessionDep) -> Product:
 def create_product(payload: ProductCreate, session: SessionDep) -> Product:
     """Crea un producto nuevo."""
     product = Product(name=payload.name, price=payload.price, stock=payload.stock)
+    if payload.category is not None:
+        product.category = payload.category
     session.add(product)
     session.commit()
     session.refresh(product)

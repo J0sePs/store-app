@@ -5,8 +5,8 @@
 
 ## Estado actual
 
-- **Change activo:** ninguno (despliegue v1 completado y verificado por el usuario; `fix-oidc-immutable-subject` archivado; pendiente de commit y push)
-- **Siguiente paso:** el usuario hace el commit de `store-app` (y el push solo cuando decida); después proponer `demo-visible-change` y, aparte, subir la imagen base del frontend.
+- **Change activo:** ninguno (todos los changes terminados; `demo-visible-change` archivado; pendiente de commit y push por el usuario)
+- **Siguiente paso:** el usuario hace el commit y el `git push origin main` de `demo-visible-change` grabando el video (se lanzarán `frontend.yml` y `products-service.yml`); después, `docs/architecture.md` y `docs/presentation.md`, y apagar AWS al terminar.
 - **Verificación del entorno:** `./init.sh`
 
 ## Plantilla por change
@@ -348,4 +348,18 @@
 - El usuario confirmó la v1 en el navegador y en la UI de Argo CD.
 - Archivado `fix-oidc-immutable-subject` en `openspec/changes/archive/2026-11-17-fix-oidc-immutable-subject/`; spec `github-oidc-access` actualizado (requisito del rol de CI con el sujeto inmutable; 3 requisitos y 14 escenarios); `openspec validate --specs` → 21 passed.
 - Comprobado que el commit pendiente **no toca** `frontend/`, `products-service/` ni `orders-service/`, así que al hacer push **no se dispara ningún workflow** de componente (los filtros `paths` son `<componente>/**`). El commit y el push los hace el usuario.
+
+### Paso 18 — Commit de `fix-oidc-immutable-subject` publicado ✅ (mensaje corregido)
+- El usuario hizo el commit y el push desde su terminal, pero el commit `0215de6` se publicó con el texto literal del marcador (`<mensaje que te proponga>`) como mensaje. Con la confirmación del usuario (AGENTS.md exige confirmar cualquier `force push`) se reescribió **solo ese último commit**: `git commit --amend` con el mensaje propuesto y `git push --force-with-lease=main:<hash anterior> origin main` → `0215de6` pasó a `f2a8ecb`, con **el mismo árbol** (los 14 archivos no cambiaron). `origin/main` y la copia local coinciden.
+- Los 14 archivos están fuera de `frontend/`, `products-service/` y `orders-service/`: la reescritura no disparó ningún workflow.
+- Lección: al pegar comandos con `<...>`, sustituir el marcador por el texto antes de ejecutarlos.
+
+### Paso 19 — Change `demo-visible-change` (v2 de la demo) implementado y archivado ✅ — SIN push
+- **products-service:** campo `category` (`VARCHAR(100) NOT NULL DEFAULT 'General'`) en el modelo y la API (opcional en `POST`, de 1 a 100 caracteres, vacía o de solo espacios → 422; en la siembra de instalaciones nuevas: `Periféricos`, `Periféricos` y `Monitores`). **Migración idempotente al arrancar** (`app/db/migrations.py`): en PostgreSQL `ALTER TABLE products ADD COLUMN IF NOT EXISTS category VARCHAR(100) NOT NULL DEFAULT 'General'` (segura con dos pods a la vez y solo de metadatos); en SQLite (tests) se comprueba la columna con el inspector. Tests: 37 passed (API y migración sobre una tabla con el DDL de la v1).
+- **frontend:** banner "Versión 2 - desplegada con GitOps" (componente `release-banner`, `role="status"`) en el `.banner-slot` del shell, columna "Categoría" (muestra `—` si el servicio no la envía, para tolerar el orden de despliegue) y campo opcional en el formulario. Tests: 45 passed; lint y build OK.
+- **Prueba contra PostgreSQL real** (`scripts/test-products-migration.sh`, 16 comprobaciones; probado con dos commits anteriores): la **v1 exacta de AWS (commit `0688166`)** crea la tabla sin `category` con 5 filas → la **v2** añade la columna, los 5 productos pasan a `General` y la huella de los datos no cambia → al reiniciar la v2, `la columna ya existe` y sin cambios → la **v1 arranca de nuevo sobre la base migrada**, lee y crea productos sin errores (su producto recibe `General`). Confirmado también con el stack local, que ya tenía la tabla de la v1 y migró con sus datos.
+- Captura real con Chromium headless: banner azul en `/products` y `/orders`, encabezados `ID, Nombre, Categoría, Precio, Stock, Creado`, `General` en los existentes y `Muebles` en uno nuevo con categoría.
+- Capacidad sin cambios (`scripts/check-capacity.py`: 17 de 22 pods, 46 % de memoria). Stack local recreado limpio en el puerto 80 con el código v2.
+- Specs sincronizados y change archivado en `openspec/changes/archive/2026-11-18-demo-visible-change/`: `products-catalog` (3 requisitos modificados: listar, crear y persistencia/arranque) y `store-frontend` (vista de productos modificada y requisito nuevo "Banner de versión").
+- **El push dispara 2 workflows** (`frontend.yml` y `products-service.yml`; no `orders-service.yml`) por los 12 archivos de `frontend/` y 8 de `products-service/`; sus `update-gitops` se serializan. Orden esperado de la demo: push → workflows → ECR (2 tags nuevos) → 2 commits `deploy(...)` en `store-gitops` → Argo CD `Synced` → rolling update (el pod nuevo de `products-service` migra la base de AWS mientras el viejo sigue sirviendo) → navegador con banner, columna "Categoría" y versiones nuevas en el pie.
 

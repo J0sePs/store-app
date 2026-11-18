@@ -32,7 +32,8 @@ def test_lista_con_datos(client: TestClient) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert [p["id"] for p in body] == [1, 2, 3]
-    assert set(body[0]) == {"id", "name", "price", "stock", "created_at"}
+    assert set(body[0]) == {"id", "name", "category", "price", "stock", "created_at"}
+    assert [p["category"] for p in body] == ["Periféricos", "Periféricos", "Monitores"]
     assert isinstance(body[0]["price"], float)
 
 
@@ -87,6 +88,47 @@ def test_crea_producto(client: TestClient) -> None:
 def test_validacion_rechaza_y_no_crea(client: TestClient, payload: dict[str, object]) -> None:
     assert client.post("/products", json=payload).status_code == 422
     assert len(client.get("/products").json()) == 3
+
+
+# --- category ---
+
+
+def test_detalle_incluye_categoria(client: TestClient) -> None:
+    resp = client.get("/products/3")
+    assert resp.status_code == 200
+    assert resp.json()["category"] == "Monitores"
+
+
+def test_alta_sin_categoria_usa_general(client: TestClient) -> None:
+    resp = client.post("/products", json={"name": "Cable", "price": 3.5, "stock": 7})
+    assert resp.status_code == 201
+    assert resp.json()["category"] == "General"
+    assert client.get(f"/products/{resp.json()['id']}").json()["category"] == "General"
+
+
+def test_alta_con_categoria(client: TestClient) -> None:
+    payload = {"name": "Silla", "price": 80, "stock": 3, "category": "Muebles"}
+    resp = client.post("/products", json=payload)
+    assert resp.status_code == 201
+    assert resp.json()["category"] == "Muebles"
+    assert client.get(f"/products/{resp.json()['id']}").json()["category"] == "Muebles"
+
+
+def test_categoria_se_recorta(client: TestClient) -> None:
+    payload = {"name": "Mesa", "price": 120, "stock": 1, "category": "  Muebles  "}
+    assert client.post("/products", json=payload).json()["category"] == "Muebles"
+
+
+@pytest.mark.parametrize("categoria", ["", "   ", "x" * 101])
+def test_categoria_invalida_no_crea(client: TestClient, categoria: str) -> None:
+    payload = {"name": "Silla", "price": 80, "stock": 3, "category": categoria}
+    assert client.post("/products", json=payload).status_code == 422
+    assert len(client.get("/products").json()) == 3
+
+
+def test_categoria_de_100_caracteres_es_valida(client: TestClient) -> None:
+    payload = {"name": "Silla", "price": 80, "stock": 3, "category": "x" * 100}
+    assert client.post("/products", json=payload).status_code == 201
 
 
 # --- GET /health ---
