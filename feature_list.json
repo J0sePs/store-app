@@ -65,8 +65,8 @@
       "dependencies": [
         "change-5"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Los workflows NO se ejecutaron (solo corren en GitHub): actionlint v1.7.12 sin errores sobre los 4 workflows; shellcheck sin hallazgos; 84 comprobaciones estáticas con Python OK (permisos mínimos, id-token solo en build-and-push, GITOPS_TOKEN solo en update-gitops, sin ${{ }} en run, versiones mayores fijadas, sin latest/kubectl/llaves de AWS, paths por componente, comandos de test de AGENTS.md); update-gitops.sh probado en local contra remoto git temporal: 35 comprobaciones OK (éxito, remoto adelantado, conflicto, sin cambios, versión incorrecta, push rechazado una vez, reintentos agotados, entradas inválidas); sha256 de Kustomize 5.8.3 verificado contra checksums.txt; README con secrets/variables y comandos válidos (bash -n); openspec validate ci-github-actions válido; ./init.sh exit 0; archivado en openspec/changes/archive/2026-11-17-ci-github-actions; main specs ci-pipeline, ci-gitops-update y ci-secrets-and-docs"
     },
     {
       "id": "change-7",

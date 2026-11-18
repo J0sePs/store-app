@@ -5,8 +5,8 @@
 
 ## Estado actual
 
-- **Change activo:** ninguno (`gitops-manifests` terminado, archivado y con commit en ambos repos)
-- **Siguiente paso:** proponer `ci-github-actions` (`change-6`) con `/openspec-propose ci-github-actions` y el prompt de `docs/prompts.md`, cuando el humano lo pida. `git push` de ambos repos pendiente de confirmación.
+- **Change activo:** ninguno (`ci-github-actions` terminado, archivado y con commit)
+- **Siguiente paso:** proponer `demo-visible-change` (`change-7`) con `/openspec-propose demo-visible-change` y el prompt de `docs/prompts.md`, cuando el humano lo pida. `git push` pendiente de confirmación.
 - **Verificación del entorno:** `./init.sh`
 
 ## Plantilla por change
@@ -189,4 +189,29 @@
 ### Siguiente paso
 - `git push` de `store-app` y de `store-gitops` pendiente de confirmación del humano (`store-gitops` tiene su primer commit).
 - Proponer `ci-github-actions`.
+
+## 2026-11-17 — ci-github-actions
+
+### Qué se hizo
+- Workflows en `.github/workflows/`: `frontend.yml`, `products-service.yml` y `orders-service.yml` (push a `main` con `paths` de su carpeta y `workflow_dispatch`; job `test` con los comandos de `AGENTS.md`; job `deploy` que llama al reutilizable) y `_deploy-component.yml` (job `build-and-push`: OIDC con `aws-actions/configure-aws-credentials`, login a ECR, buildx, push con tag = SHA corto de 7 caracteres, `provenance: false`, comprobación con `aws ecr describe-images`; job `update-gitops` con `needs`, checkout de `<dueño>/store-gitops` con `GITOPS_TOKEN`, Kustomize 5.8.3 verificado con sha256 y llamada al script).
+- `.github/scripts/update-gitops.sh`: `kustomize edit set image`, comprobación de que `APP_VERSION` y la imagen quedan con el SHA, commit `deploy(<servicio>): <sha>` como `github-actions[bot]` y push con `pull --rebase`, 5 intentos con espera creciente y reinicio desde el remoto si el rebase choca; sin cambios = salida correcta. `.github/scripts/test-update-gitops.sh` lo prueba en local (35 comprobaciones) contra un remoto git temporal.
+- `README.md` raíz: sección "CI/CD con GitHub Actions" con el flujo, los secrets y variables (`GITOPS_TOKEN`, `AWS_ROLE_ARN`, `AWS_REGION`), cómo crear el token y la lista de comprobación del primer despliegue.
+
+### Evidencia
+- **Los workflows no se ejecutaron** (solo corren en GitHub tras el push) y no se creó ningún secret ni se tocó AWS ni ningún remoto: la prueba del script usó un repositorio git temporal y `store-gitops` real sigue con su único commit.
+- `actionlint` v1.7.12 sin errores; `shellcheck` sin hallazgos; 84 comprobaciones estáticas OK (permisos, `GITOPS_TOKEN` solo en `update-gitops`, sin `${{ }}` dentro de `run`, versiones mayores en cada `uses:`, sin `latest`, `kubectl` ni llaves de AWS, nombres de jobs y steps en inglés).
+- Prueba local del script: caso feliz, remoto adelantado (historia lineal), conflicto en el mismo `kustomization.yaml` (se reinicia desde el remoto y se conserva el commit ajeno), sin cambios, `APP_VERSION` incorrecta (falla antes del commit), push rechazado una vez, reintentos agotados (mensaje en español) y entradas inválidas (inyección rechazada). Dos mejoras salieron de la prueba: el script detecta "el remoto ya contiene este cambio" tras el rebase, y la prueba acepta los tags numéricos que Kustomize entrecomilla.
+- `openspec validate ci-github-actions` → válido; `./init.sh` → código 0.
+- Specs sincronizados a `openspec/specs/` (`ci-pipeline`, `ci-gitops-update`, `ci-secrets-and-docs`) y change archivado en `openspec/changes/archive/2026-11-17-ci-github-actions/`.
+
+### Decisiones y notas
+- **`APP_VERSION` no se edita:** Kustomize la copia del tag (change `gitops-manifests`); la CI solo verifica que coincide con el SHA.
+- Los archivos de workflow no están en `paths`: subir la CI no dispara despliegues antes de que exista la infraestructura. Para probar un cambio de CI: *Run workflow* (solo desde `main`: el rol OIDC solo confía en esa rama).
+- Acciones fijadas por versión mayor (`checkout`, `setup-*` y `build-push-action` v7, `configure-aws-credentials` v6, `amazon-ecr-login` v2, `setup-buildx` v4); no por SHA de commit.
+- **Para `demo-visible-change`:** el cambio toca frontend y products-service, así que correrán dos workflows en paralelo y sus `update-gitops` se serializan. `products-service` crea la tabla con `create_all`, que **no** añade columnas a una tabla existente: la columna `category` necesita una migración al arrancar (por ejemplo `ALTER TABLE products ADD COLUMN IF NOT EXISTS category ...`), si no, en un clúster con datos el servicio fallaría. Las tablas `<th>` del frontend ya están listas para la columna "Categoría" y el shell tiene `.banner-slot`.
+- **Orden real para el primer despliegue (lo hace el humano):** `terraform apply` (infra) → `aws eks update-kubeconfig` → `terraform apply` de `argocd/` → namespace `store` y Secrets de las bases → `kubectl apply -f argocd/root-app.yaml` (con `store-gitops` ya subido a GitHub) → crear `AWS_ROLE_ARN` y `GITOPS_TOKEN` en GitHub → push de un cambio en un componente.
+
+### Siguiente paso
+- `git push` pendiente de confirmación del humano.
+- Proponer `demo-visible-change`.
 

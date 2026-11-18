@@ -1,0 +1,69 @@
+# CI de orders-service: pruebas -> imagen en ECR (tag = SHA corto) -> actualización de store-gitops.
+# Se dispara con un push a main que cambie orders-service/ (o a mano con workflow_dispatch).
+name: Orders service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "orders-service/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Dos pushes seguidos al mismo componente se procesan en orden (sin cancelar el que está corriendo)
+concurrency:
+  group: deploy-orders-service
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Test orders-service
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: orders-service
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: orders-service/go.mod
+          cache-dependency-path: orders-service/go.sum
+
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::Archivos sin formato (ejecuta gofmt -w .):"
+            echo "$unformatted"
+            exit 1
+          fi
+          echo "Formato correcto"
+
+      - name: Run vet
+        run: go vet ./...
+
+      - name: Run unit tests
+        run: go test ./...
+
+  deploy:
+    name: Deploy orders-service
+    needs: test
+    # id-token: write lo necesita el workflow reutilizable para asumir el rol de AWS por OIDC
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/_deploy-component.yml
+    with:
+      component: orders-service
+      aws-role-arn: ${{ vars.AWS_ROLE_ARN }}
+      aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+    secrets:
+      GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}

@@ -28,7 +28,7 @@ parcial-3-nube/                 (carpeta contenedora, no es repo)
 │   ├── products-service/
 │   ├── orders-service/
 │   ├── infra/terraform/ (+ argocd/)
-│   ├── .github/workflows/
+│   ├── .github/workflows/ (+ scripts/)
 │   ├── docs/                   (architecture.md, presentation.md, prompts.md)
 │   └── docker-compose.yml
 └── store-gitops/               (repo DevOps que vigila Argo CD)
