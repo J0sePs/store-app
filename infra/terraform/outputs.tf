@@ -22,3 +22,9 @@ output "update_kubeconfig_command" {
   description = "Comando para configurar kubectl contra el clúster"
   value       = "aws eks update-kubeconfig --name ${module.eks.cluster_name} --region ${var.region}"
 }
+
+output "github_actions_subject" {
+  description = "Sujeto (sub) del token OIDC que acepta el rol de CI; debe coincidir con el que emite GitHub (gh api repos/<dueño>/<repo>/actions/oidc/customization/sub)"
+  value       = "repo:${local.github_oidc_subject}"
+}
+

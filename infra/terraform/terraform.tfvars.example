@@ -16,3 +16,10 @@ github_owner = "your-github-user"
 # Tipo de nodos: por defecto t3.small, el que permite el plan Gratuito de AWS (2 nodos, 11 pods cada uno).
 # Solo en una cuenta de pago puedes usar nodos más grandes:
 # node_instance_types = ["t3.medium"]
+
+# Ids numéricos de GitHub (dueño y repositorio). Obligatorios si el repositorio usa el sujeto inmutable
+# (compruébalo con: gh api repos/<dueño>/<repo>/actions/oidc/customization/sub  -> use_immutable_subject: true).
+# Se obtienen con: gh api repos/<dueño>/<repo> --jq '.id, .owner.id'   (primero el id del repositorio y luego el del dueño)
+# Define los dos o ninguno. Sin ellos se usa el formato antiguo del sub: repo:<dueño>/<repo>:ref:refs/heads/<rama>
+# github_owner_id      = 123456789
+# github_repository_id = 987654321

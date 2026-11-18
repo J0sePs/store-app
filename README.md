@@ -76,7 +76,7 @@ gh secret set GITOPS_TOKEN --repo "<USUARIO>/store-app" --body "$GITOPS_TOKEN"
 unset GITOPS_TOKEN
 ```
 
-No hay llaves de acceso de AWS en GitHub: la CI entra por OIDC y el rol solo se puede asumir desde la rama `main` de `<USUARIO>/store-app`.
+No hay llaves de acceso de AWS en GitHub: la CI entra por OIDC y el rol solo se puede asumir desde la rama `main` de `<USUARIO>/store-app`. Si el login falla con `Not authorized to perform sts:AssumeRoleWithWebIdentity`, casi siempre es el *sujeto inmutable* de GitHub: el `sub` del token lleva los ids numéricos del dueño y del repositorio. Defínelos en `terraform.tfvars` (`github_owner_id` y `github_repository_id`) y aplica; los comandos para obtenerlos están en `infra/terraform/README.md` (sección "Ids de GitHub para el rol de CI").
 
 ### Antes del primer push de un componente
 

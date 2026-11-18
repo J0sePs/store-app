@@ -5,8 +5,8 @@
 
 ## Estado actual
 
-- **Change activo:** ninguno (`infra-free-tier-nodes` aplicado, verificado y archivado; pendiente de commit)
-- **Siguiente paso:** el humano crea `GITOPS_TOKEN` y las variables en GitHub, hace push de `store-gitops` (2 commits locales) y lanza el primer build de los 3 componentes con `workflow_dispatch`; se comprueban las 3 imágenes en ECR y los tags en `store-gitops`; solo entonces se aplica la `root-app` de Argo CD.
+- **Change activo:** ninguno (despliegue v1 completado y verificado por el usuario; `fix-oidc-immutable-subject` archivado; pendiente de commit y push)
+- **Siguiente paso:** el usuario hace el commit de `store-app` (y el push solo cuando decida); después proponer `demo-visible-change` y, aparte, subir la imagen base del frontend.
 - **Verificación del entorno:** `./init.sh`
 
 ## Plantilla por change
@@ -302,4 +302,50 @@
 - Los 3 workflows (`frontend.yml`, `products-service.yml`, `orders-service.yml`) ya tienen `workflow_dispatch` y están en `origin/main` junto con `_deploy-component.yml`. `gh` 2.97 está instalado y autenticado. Se lanzan con `gh workflow run <archivo> --repo <dueño>/store-app --ref main` (solo desde `main`, por la confianza OIDC del rol).
 - **Antes de lanzarlos, hacer push de los 2 commits locales de `store-gitops`**: así el bot de la CI edita sobre la versión con 1 réplica y los recursos nuevos, y se evita que el push posterior diverja.
 - Orden previsto: GitHub (variables y token) → push de `store-gitops` → lanzar los 3 workflows → ver las 3 imágenes en ECR (`aws ecr describe-images`) y los commits `deploy(<servicio>): <sha>` en `store-gitops` → **solo entonces** aplicar `kubectl apply -f argocd/root-app.yaml`.
+
+### Paso 10 — Primer build de los 3 componentes: ❌ fallan en el login OIDC (diagnóstico)
+- Tras comprobar que existen `AWS_ROLE_ARN`, `AWS_REGION` y `GITOPS_TOKEN` y que ambos repos están sincronizados, se lanzaron con `gh workflow run <archivo> --ref main` los 3 workflows (runs `44225589495` frontend, `44225593951` products-service y `44225598166` orders-service; commit `0688166`).
+- Resultado idéntico en los 3: el job `test` pasa; **`Build and push image` falla en el paso `Configure AWS credentials (OIDC)`** con `Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity` (12 reintentos); `update-gitops` queda `skipped` (el diseño funciona: no se tocó `store-gitops`). No se publicó ninguna imagen.
+- **Causa raíz** (comprobada en solo lectura): GitHub tiene activado en el repositorio `use_immutable_subject: true` (`gh api repos/<dueño>/store-app/actions/oidc/customization/sub` → `sub_claim_prefix: repo:<dueño>@<id del dueño>/store-app@<id del repo>`). El claim `sub` del token lleva los **ids numéricos** (dueño `146149882`, repositorio `1461989222`, coinciden con `gh api repos/...`), y la política de confianza del rol exige el formato antiguo `repo:<dueño>/store-app:ref:refs/heads/main`, así que AWS rechaza el token.
+- Descartado: la variable `AWS_ROLE_ARN` es idéntica a la salida de Terraform (misma longitud y contenido) y `AWS_REGION` es `us-east-1` sin espacios; el proveedor OIDC existe (`token.actions.githubusercontent.com`, audiencia `sts.amazonaws.com`) y las condiciones `aud` e `iss` de la política son correctas.
+- Corrección propuesta: el `sub` de la política pasa al formato con ids (`repo:<dueño>@<id>/store-app@<id>:ref:refs/heads/main`), sin comodines; los ids no son secretos y se obtienen con `gh api repos/<dueño>/store-app --jq '.id, .owner.id'`.
+
+### Paso 11 — Change `fix-oidc-immutable-subject`: código y plan listos ✅ (el `apply` espera el OK del usuario)
+- Elegido por el usuario entre tres opciones (change de OpenSpec, arreglo directo o desactivar el sujeto inmutable en GitHub); se descartó desactivar el sujeto inmutable porque quita la protección contra *repo-jacking*.
+- Terraform: variables `github_owner_id` y `github_repository_id` (`number`, por defecto `null`; las dos o ninguna, con validación en español), un `local` que calcula el sujeto exacto (con ids `repo:<dueño>@<id>/<repo>@<id>:ref:refs/heads/<rama>`; sin ellos, el formato antiguo) y la salida `github_actions_subject`. Los ids reales se tomaron de `gh api` y están solo en `terraform.tfvars` (ignorado por git); `terraform.tfvars.example` lleva marcadores. Los workflows no cambian.
+- Pruebas sin tocar AWS: un solo id, solo el del repositorio y un id no positivo fallan con mensaje en español; el sujeto calculado con ids es exactamente el que emite GitHub y el del formato antiguo es el anterior; ninguno contiene comodines.
+- **`terraform plan -out=plan.tfplan`: 0 to add, 1 to change, 0 to destroy.** Analizado con `terraform show -json`: único cambio = modificación **en el sitio** de `module.github_actions_role.aws_iam_role.this[0]`; sin reemplazo; `Action`, `Effect`, `Principal`, `aud` e `iss` idénticos; el `sub` pasa de `repo:<dueño>/store-app:ref:refs/heads/main` a `repo:<dueño>@<id>/store-app@<id>:ref:refs/heads/main`, valor único y sin comodines. Sin costo.
+- Documentación: `infra/terraform/README.md` (variables, viñeta de seguridad, sección "Ids de GitHub para el rol de CI" y entrada de problemas frecuentes para `Not authorized to perform sts:AssumeRoleWithWebIdentity`) y la sección de CI del `README.md`.
+- Verificaciones: `terraform fmt -check` y `validate` OK en las dos etapas, `openspec validate fix-oidc-immutable-subject` válido, `./init.sh` con código 0.
+
+### Paso 12 — Corrección OIDC aplicada y primer build en verde ✅
+- Con el OK del usuario se ejecutó `terraform apply plan.tfplan` → **0 added, 1 changed, 0 destroyed** (solo la política de confianza del rol de CI). Política real comprobada con `aws iam get-role`: `sub` = `repo:<dueño>@<id>/store-app@<id>:ref:refs/heads/main` (único valor, sin comodines), `aud` e `iss` intactos; la salida `github_actions_subject` coincide.
+- Relanzados los 3 workflows (`gh workflow run <archivo> --ref main`; runs `44226929066`, `44226932332` y `44226936001`, commit `0688166`): **los tres terminan en `success`**, con sus 3 jobs (`test`, `Build and push image` —el paso OIDC ya pasa— y `Update store-gitops`). Los 3 intentos anteriores (`44225589495`, `44225593951`, `44225598166`) habían fallado en OIDC.
+
+### Paso 13 — Verificación de imágenes y de `store-gitops` ✅
+- **ECR** (`describe-images`): `frontend` (20,1 MiB), `products-service` (67,8 MiB) y `orders-service` (4,3 MiB), todas con el tag **`0688166`** = SHA corto del commit; **ninguna con `latest`**.
+- **`store-gitops` en GitHub**: tres commits del bot `github-actions[bot]` encima de los del usuario: `deploy(products-service): 0688166`, `deploy(orders-service): 0688166` y `deploy(frontend): 0688166`; cada uno toca solo su `apps/<servicio>/kustomization.yaml` (bloque `images`).
+- `git pull --rebase` en `../store-gitops` (rama alineada con `origin/main`). `kubectl kustomize` de los 3 componentes: imagen `...:0688166` y `APP_VERSION` = `0688166` (contrato de la CI verificado de punta a punta).
+- **Escaneo de ECR** (`scan on push`, tipo BASIC): `orders-service` sin hallazgos; `products-service` 3 HIGH, 12 MEDIUM y 3 LOW; `frontend` 12 CRITICAL, 63 HIGH, 57 MEDIUM y 12 LOW. Causa del frontend: la imagen base `nginxinc/nginx-unprivileged:1.27-alpine` es antigua (OpenSSL 3.3.3-r0, curl 8.12.1-r1, libxml2 2.13.4-r6, expat…). No bloquea la demo; **mejora pendiente**: subir la imagen base del frontend (y revisar `python:3.12-slim`) en un change aparte.
+
+### Paso 14 — Pre-vuelo del Application raíz (sin aplicar) ✅, a la espera del OK
+- `kubectl apply --dry-run=server -f argocd/root-app.yaml` → `application.argoproj.io/store-root created (server dry run)` (solo un aviso benigno sobre el nombre del finalizador estándar de Argo CD). `repoURL` = `store-gitops` (público, Argo CD lo lee sin credenciales), ruta `argocd/apps` y 5 Applications.
+- Estado previo: 12 pods en el clúster, Secrets `products-db-credentials` y `orders-db-credentials` presentes en `store`, y ninguna Application todavía. **El Application raíz NO se ha aplicado.**
+
+### Paso 15 — Application raíz aplicada (bootstrap único) ✅
+- Con el OK explícito del usuario se ejecutó `kubectl apply -f argocd/root-app.yaml` → `application.argoproj.io/store-root created`. Argo CD creó las 5 Applications (`frontend`, `products-service`, `orders-service`, `products-db`, `orders-db`) y sincronizó `store-gitops` (rama `main`).
+
+### Paso 16 — Verificación del despliegue v1 ✅
+- `kubectl get applications -n argocd`: **las 6 Applications (raíz y 5 componentes) en `Synced` / `Healthy`**.
+- `kubectl get pods,svc -n store`: 5 pods en `Running` (`frontend`, `products-service`, `orders-service`, `products-db-0`, `orders-db-0`); los dos servicios muestran **2 reinicios** cada uno por arrancar antes de que sus bases estuvieran listas (esperado: reintentan la conexión y Kubernetes los reinicia; después estables). PVC `data-products-db-0` y `data-orders-db-0` en `Bound`, 5Gi, `gp3`.
+- Versión desplegada = tag: los 3 Deployments usan `...:0688166` y `APP_VERSION=0688166`.
+- **URL del frontend**: `kubectl get svc frontend -n store -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'` (balanceador clásico de AWS; el DNS respondió a los ~5 s). A través de él: `/health` → `{"status":"ok","version":"0688166"}`, `/version.json` → `0688166`, `/api/products/health` y `/api/orders/health` → `0688166` (200), `/api/products` → 3 productos de ejemplo, `/api/orders` → `[]`, y `/` y `/orders` → 200 (SPA). No se creó ningún dato de prueba.
+- La captura con Chromium headless del balanceador falló con `ERR_BLOCKED_BY_CLIENT` (restricción del entorno del navegador; `curl` sí llega): la UI visual la revisa el usuario en su navegador.
+- **UI de Argo CD** (comprobada: `port-forward` y respuesta HTTP 200, Argo CD v3.6.1; el Secret `argocd-initial-admin-secret` existe): `kubectl port-forward svc/argocd-server -n argocd 8080:443` y abrir `https://localhost:8080` (certificado autofirmado), usuario `admin`; contraseña inicial: `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo`. La contraseña no se mostró ni se registró.
+- Costo actual: ≈ 0,23 USD/h (infra ≈ 0,20 + balanceador ≈ 0,03). Recordatorio: al terminar, seguir la sección de `destroy` de `infra/terraform/README.md` (borrar primero las Applications, los PVC y el balanceador).
+
+### Paso 17 — Verificación del usuario y archivado de `fix-oidc-immutable-subject` ✅
+- El usuario confirmó la v1 en el navegador y en la UI de Argo CD.
+- Archivado `fix-oidc-immutable-subject` en `openspec/changes/archive/2026-11-17-fix-oidc-immutable-subject/`; spec `github-oidc-access` actualizado (requisito del rol de CI con el sujeto inmutable; 3 requisitos y 14 escenarios); `openspec validate --specs` → 21 passed.
+- Comprobado que el commit pendiente **no toca** `frontend/`, `products-service/` ni `orders-service/`, así que al hacer push **no se dispara ningún workflow** de componente (los filtros `paths` son `<componente>/**`). El commit y el push los hace el usuario.
 

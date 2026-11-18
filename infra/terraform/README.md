@@ -82,7 +82,7 @@ Imprime los pods y la memoria por grupo y por nodo, y termina con error si queda
 ```bash
 cd infra/terraform
 cp terraform.tfvars.example terraform.tfvars   # git lo ignora
-# edita terraform.tfvars: pon tu usuario en github_owner (y, si quieres, tu IP en cluster_endpoint_public_access_cidrs)
+# edita terraform.tfvars: pon tu usuario en github_owner, los ids de GitHub (ver "Ids de GitHub para el rol de CI") y, si quieres, tu IP en cluster_endpoint_public_access_cidrs
 terraform init
 terraform plan
 terraform apply          # tarda unos 15-20 minutos
@@ -129,6 +129,7 @@ Los hace el change `gitops-manifests` y la CI (ver `docs/prompts.md`, sección "
 | Variable | Por defecto | Descripción |
 |---|---|---|
 | `github_owner` | *(obligatoria)* | Usuario u organización de GitHub dueño de `store-app` |
+| `github_owner_id`, `github_repository_id` | `null` | Ids numéricos de GitHub, **los dos o ninguno**. Obligatorios si el repositorio usa el sujeto inmutable (ver más abajo) |
 | `github_repository` / `github_branch` | `store-app` / `main` | Único repositorio y rama que pueden asumir el rol de CI |
 | `cluster_name` | `store-eks` | Nombre del clúster (la etapa 2 usa el mismo) |
 | `kubernetes_version` | `1.36` | Versión de Kubernetes (EKS soporta 1.34 a 1.37) |
@@ -142,7 +143,7 @@ Salidas de la etapa 1: `cluster_name`, `region`, `ecr_repository_urls`, `github_
 
 ## Seguridad
 
-- **Sin llaves estáticas:** GitHub Actions asume el rol por OIDC. La política de confianza exige el sujeto exacto `repo:<github_owner>/<github_repository>:ref:refs/heads/<github_branch>` (sin comodines), así que otra rama u otro repositorio no pueden asumirlo.
+- **Sin llaves estáticas:** GitHub Actions asume el rol por OIDC. La política de confianza exige un único sujeto exacto (sin comodines), así que otra rama u otro repositorio no pueden asumirlo: con los ids definidos es `repo:<github_owner>@<github_owner_id>/<github_repository>@<github_repository_id>:ref:refs/heads/<github_branch>` (sujeto inmutable de GitHub) y sin ellos `repo:<github_owner>/<github_repository>:ref:refs/heads/<github_branch>`. La salida `github_actions_subject` muestra el que quedó configurado.
 - El rol solo puede iniciar sesión en ECR y subir o consultar imágenes de **los tres repositorios**. No tiene permisos sobre EKS ni IAM.
 - El estado es **local** (`terraform.tfstate`) y está ignorado por git. Contiene datos de tu cuenta: no lo borres mientras exista la infraestructura (te quedarías con recursos huérfanos que siguen cobrando) y no lo subas. Un backend remoto (S3) queda para más adelante.
 - Los repositorios ECR aceptan etiquetas mutables para que CI pueda repetir una subida con el mismo SHA; la etiqueta `latest` está prohibida y se controla en CI.
@@ -193,8 +194,20 @@ aws ec2 describe-nat-gateways --region us-east-1 --filter Name=state,Values=avai
 aws ec2 describe-addresses --region us-east-1 --query 'Addresses[].PublicIp'
 ```
 
+## Ids de GitHub para el rol de CI
+
+GitHub puede emitir el `sub` del token OIDC con los **ids numéricos** del dueño y del repositorio (*sujeto inmutable*, activado por defecto en repositorios nuevos). Si la política de confianza del rol espera el formato antiguo, el login falla con `Not authorized to perform sts:AssumeRoleWithWebIdentity`. Comprueba qué formato usa tu repositorio y obtén los ids:
+
+```bash
+gh api repos/<USUARIO>/store-app/actions/oidc/customization/sub      # use_immutable_subject y sub_claim_prefix
+gh api repos/<USUARIO>/store-app --jq '.id, .owner.id'               # primero el id del repositorio y luego el del dueño
+```
+
+Si `use_immutable_subject` es `true`, define en `terraform.tfvars` los dos ids (`github_repository_id` con el primer número y `github_owner_id` con el segundo) y aplica. Con los ids, un repositorio renombrado, transferido o recreado con el mismo nombre no hereda el acceso. El valor que acepta el rol se ve con `terraform output github_actions_subject`.
+
 ## Problemas frecuentes
 
+- **`Not authorized to perform sts:AssumeRoleWithWebIdentity` en `configure-aws-credentials` (GitHub Actions):** el `sub` del token no coincide con la política de confianza del rol. Lo más probable es el sujeto inmutable: define `github_owner_id` y `github_repository_id` (ver "Ids de GitHub para el rol de CI"). Si no, revisa que `AWS_ROLE_ARN` sea idéntica a `terraform output github_actions_role_arn`, que el workflow corra en la rama `main` y que `github_owner` y `github_repository` coincidan con el repositorio.
 - **`EntityAlreadyExists` al crear el proveedor OIDC:** ya existe en la cuenta; usa `create_github_oidc_provider = false`.
 - **El grupo de nodos falla con `not eligible for Free Tier`:** la cuenta está en el plan Gratuito y el tipo de instancia no es elegible. Usa `t3.small` (el valor por defecto) u otro tipo de la lista de `aws ec2 describe-instance-types --filters Name=free-tier-eligible,Values=true`, o pasa la cuenta a un plan de pago.
 - **Pods en `Pending` por falta de capacidad:** 2 nodos `t3.small` admiten 22 pods en total (ver "Capacidad del clúster"). Ejecuta `scripts/check-capacity.py` para ver qué grupo ocupa más; si de verdad necesitas más, sube `node_desired_size` y `node_max_size`, o usa un tipo con más pods.

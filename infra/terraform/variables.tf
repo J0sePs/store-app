@@ -106,6 +106,28 @@ variable "github_repository" {
   default     = "store-app"
 }
 
+variable "github_owner_id" {
+  description = "Id numérico del dueño de GitHub (gh api repos/<dueño>/<repo> --jq .owner.id). Si GitHub usa el sujeto inmutable (use_immutable_subject), el sub del token lleva los ids; defínelo junto con github_repository_id. Null = formato antiguo"
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.github_owner_id == null || var.github_owner_id > 0
+    error_message = "github_owner_id debe ser un número positivo (id de GitHub) o null."
+  }
+}
+
+variable "github_repository_id" {
+  description = "Id numérico del repositorio de GitHub (gh api repos/<dueño>/<repo> --jq .id). Defínelo junto con github_owner_id; null = formato antiguo del sub"
+  type        = number
+  default     = null
+
+  validation {
+    condition     = (var.github_owner_id == null) == (var.github_repository_id == null) && (var.github_repository_id == null || var.github_repository_id > 0)
+    error_message = "Define github_owner_id y github_repository_id juntos (los dos ids numéricos de GitHub) o ninguno, y deben ser positivos."
+  }
+}
+
 variable "github_branch" {
   description = "Rama del repositorio que puede asumir el rol de CI"
   type        = string
