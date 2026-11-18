@@ -12,14 +12,6 @@ resource "helm_release" "argocd" {
   wait             = true
   timeout          = 900
 
-  values = [
-    yamlencode({
-      server = {
-        # Sin balanceador (ahorra costo): la interfaz se abre con kubectl port-forward
-        service = {
-          type = "ClusterIP"
-        }
-      }
-    })
-  ]
+  # Valores en values.yaml: Argo CD reducido a 4 pods para nodos t3.small (sin dex, notifications ni ApplicationSet)
+  values = [file("${path.module}/values.yaml")]
 }

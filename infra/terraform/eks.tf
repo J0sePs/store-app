@@ -21,7 +21,12 @@ module "eks" {
 
   # Addons base. El driver EBS CSI va aparte (ebs-csi.tf) para evitar una dependencia circular
   addons = {
-    coredns    = {}
+    # Una sola réplica de CoreDNS: nodos t3.small de solo 11 pods (ver scripts/check-capacity.py)
+    coredns = {
+      configuration_values = jsonencode({
+        replicaCount = 1
+      })
+    }
     kube-proxy = {}
     vpc-cni = {
       before_compute = true

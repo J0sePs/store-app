@@ -28,6 +28,7 @@ parcial-3-nube/                 (carpeta contenedora, no es repo)
 │   ├── products-service/
 │   ├── orders-service/
 │   ├── infra/terraform/ (+ argocd/)
+│   ├── scripts/                (check-capacity.py: presupuesto de pods y memoria del clúster)
 │   ├── .github/workflows/ (+ scripts/)
 │   ├── docs/                   (architecture.md, presentation.md, prompts.md)
 │   └── docker-compose.yml
@@ -65,6 +66,7 @@ parcial-3-nube/                 (carpeta contenedora, no es repo)
 - La configuración va solo por variables de entorno (12-factor).
 - Los secrets **nunca** van a git (ni contraseñas de BD, ni tokens, ni `terraform.tfvars`, ni `*.tfstate`).
 - Kubernetes: namespace `store`, probes en `/health`, requests/limits definidos, PostgreSQL como StatefulSet con PVC gp3.
+- **Capacidad (2 × t3.small, el tipo elegido por ser elegible en el plan Gratuito de AWS):** máximo 11 pods y ~1,4 GiB asignables por nodo (22 pods en total). Una réplica por Deployment, y una por CoreDNS, el controlador EBS CSI y cada componente de Argo CD (`dex`, `notifications` y `applicationSet` apagados). Deben quedar **al menos 3 pods libres** para el rolling update. **Antes de añadir pods, réplicas o subir `requests` de memoria, ejecuta `products-service/.venv/bin/python scripts/check-capacity.py`** y no superes su presupuesto (pods libres y 70 % de la memoria asignable).
 
 ## 6. Acciones que requieren confirmación del humano
 

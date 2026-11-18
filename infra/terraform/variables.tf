@@ -40,9 +40,9 @@ variable "kubernetes_version" {
 }
 
 variable "node_instance_types" {
-  description = "Tipos de instancia del grupo de nodos administrado"
+  description = "Tipos de instancia del grupo de nodos administrado. t3.small porque el plan Gratuito de AWS solo permite instancias elegibles para la capa gratuita (t3.medium falla con 'not eligible for Free Tier'); en una cuenta de pago se puede usar [\"t3.medium\"] desde terraform.tfvars"
   type        = list(string)
-  default     = ["t3.medium"]
+  default     = ["t3.small"]
 }
 
 variable "node_min_size" {

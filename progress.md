@@ -5,8 +5,8 @@
 
 ## Estado actual
 
-- **Change activo:** ninguno (`ci-github-actions` terminado, archivado y con commit)
-- **Siguiente paso:** proponer `demo-visible-change` (`change-7`) con `/openspec-propose demo-visible-change` y el prompt de `docs/prompts.md`, cuando el humano lo pida. `git push` pendiente de confirmación.
+- **Change activo:** ninguno (`infra-free-tier-nodes` aplicado, verificado y archivado; pendiente de commit)
+- **Siguiente paso:** el humano crea `GITOPS_TOKEN` y las variables en GitHub, hace push de `store-gitops` (2 commits locales) y lanza el primer build de los 3 componentes con `workflow_dispatch`; se comprueban las 3 imágenes en ECR y los tags en `store-gitops`; solo entonces se aplica la `root-app` de Argo CD.
 - **Verificación del entorno:** `./init.sh`
 
 ## Plantilla por change
@@ -214,4 +214,92 @@
 ### Siguiente paso
 - `git push` pendiente de confirmación del humano.
 - Proponer `demo-visible-change`.
+
+## 2026-11-17 — Despliegue v1 en AWS (en curso)
+
+> Sesión guiada: se pide confirmación antes de cada comando que crea recursos o cuesta dinero. Cuenta de AWS enmascarada (`************`); no se registran IP, contraseñas ni tokens.
+
+### Paso 1 — Credenciales y permisos (solo lectura) ✅
+- `aws sts get-caller-identity` → usuario IAM (credenciales locales), región `us-east-1`; pertenece al grupo `admin`.
+- `aws iam simulate-principal-policy` → `allowed` para `iam:CreateRole`, `iam:AttachRolePolicy`, `iam:PutRolePolicy`, `iam:CreateOpenIDConnectProvider`, `iam:PassRole`, `eks:CreateCluster`, `ec2:CreateVpc`, `ec2:CreateNatGateway`, `ec2:AllocateAddress`, `ecr:CreateRepository`, `ecr:PutLifecyclePolicy` y `kms:CreateKey`.
+- Estado previo de la cuenta: sin proveedor OIDC de GitHub (por eso `create_github_oidc_provider = true`), sin clústeres EKS, sin repositorios ECR, sin roles `store-eks-*`, 0 NAT gateways y 0 instancias EC2 en ejecución; 1 VPC de 5 y 1 EIP de 5 (cuotas sobradas).
+
+### Paso 2 — `terraform.tfvars` (local, ignorado por git) ✅
+- Creado desde el `.example` con `github_owner` y `github_repository` tomados del remoto de `store-app`, rama `main`, `create_github_oidc_provider = true` y `cluster_endpoint_public_access_cidrs` limitado a la IP pública del operador (/32).
+- El creador del clúster queda administrador: `enable_cluster_creator_admin_permissions = true` y el plan incluye `aws_eks_access_entry` y `aws_eks_access_policy_association` (`AmazonEKSClusterAdminPolicy`) para su usuario IAM.
+
+### Paso 3 — `terraform plan` (solo lectura) ✅, a la espera de confirmación para `apply`
+- `terraform init` correcto; `terraform plan -out=plan.tfplan` → **Plan: 71 to add, 0 to change, 0 to destroy** (sin advertencias).
+- Incidente corregido: el archivo del plan se llamó primero `tfplan`, que **no** estaba cubierto por el `.gitignore` (solo `*.tfplan`); se renombró a `plan.tfplan` y se comprobó con `git check-ignore`.
+- Revisado en el plan: endpoint público con un único CIDR /32; rol de CI con sujeto exacto `repo:<owner>/store-app:ref:refs/heads/main`; 3 repos ECR (`scan_on_push`, `force_delete`, ciclo de vida `imageCountMoreThan`); nodos `t3.medium` × 2 (`AL2023_x86_64_STANDARD`); un solo NAT gateway.
+- Costo estimado de la infraestructura (aprox., `us-east-1`): ≈ 0,24 USD/h sin balanceadores (EKS 0,10 + 2 nodos 0,083 + NAT 0,045 + IPv4 0,005 + volúmenes de nodos, KMS y logs de poca monta); ≈ 0,27 USD/h con el balanceador del frontend (≈ 6,5 USD/día).
+
+### Paso 3b — El `apply` falló a mitad (plan Gratuito de AWS) ❌ → corregido con el change `infra-free-tier-nodes`
+- El usuario confirmó el `apply` y se ejecutó `terraform apply plan.tfplan` (≈ 46 min en total). Se crearon el clúster EKS (11 min 42 s), la VPC, el NAT, los 3 repos ECR, los roles IAM, el proveedor OIDC de GitHub y el addon `vpc-cni`.
+- **Falló el grupo de nodos:** `AsgInstanceLaunchFailures … InvalidParameterCombination – The specified instance type is not eligible for Free Tier`. La cuenta está en el **plan Gratuito** (`aws freetier get-account-plan-state` → `accountPlanType: FREE`, 129,60 USD de crédito) y solo permite instancias de la capa gratuita (`t3.micro`, `t3.small`, `t4g.*`, `t8i.*`, `c7i-flex.large`, `m7i-flex.large`); `t3.medium` no es elegible.
+- Estado tras el fallo: clúster `ACTIVE` (Kubernetes 1.36), grupo de nodos `CREATE_FAILED`, sin nodos. Mientras no se corrija, el clúster cuesta ≈ 0,16 USD/h (EKS + NAT).
+- Decisión del usuario (descartó las alternativas `c7i-flex`, `m7i-flex`, plan de pago y destruir todo): **2 × t3.small** y ajustar el sistema para que quepa (11 pods y ≈ 1,4 GiB por nodo), como change de OpenSpec.
+
+### Paso 3c — Change `infra-free-tier-nodes`: código y plan listos ✅ (el `apply` lo ejecuta el usuario)
+- Terraform: `node_instance_types = ["t3.small"]` (2/2/2), `coredns` con `replicaCount = 1` y `aws-ebs-csi-driver` con `controller.replicaCount = 1` (claves validadas con `aws eks describe-addon-configuration`), y Argo CD con `values.yaml` (`dex` y `notifications` apagados, ApplicationSet con 0 réplicas, 1 réplica y recursos pequeños en los 4 componentes).
+- `store-gitops` (2 commits locales, **sin push**): 1 réplica por Deployment, `RollingUpdate` con `maxSurge: 1` y `maxUnavailable: 0`, requests de memoria PostgreSQL 128Mi, `products-service` 96Mi, `orders-service` 32Mi y frontend 32Mi, y PostgreSQL con `shared_buffers=32MB` y `max_connections=20`.
+- **Presupuesto** (`scripts/check-capacity.py`): 17 pods de 22 (5 libres; 3 tras el rolling update de la demo) y 1 350 MiB de ≈ 2 868 (47 %).
+
+  | Grupo | Pods | Memoria solicitada |
+  |---|---|---|
+  | DaemonSets (`aws-node`, `kube-proxy`, `ebs-csi-node` × 2) | 6 | ≈ 240 MiB |
+  | kube-system (`coredns`, `ebs-csi-controller`) | 2 | ≈ 310 MiB |
+  | Argo CD (controller, repo-server, server, redis) | 4 | 384 MiB |
+  | Aplicación (frontend, 2 servicios, 2 bases) | 5 | 416 MiB |
+  | **Total** | **17 de 22** | **≈ 1 350 MiB (47 %)** |
+
+- Medición real (Docker): PostgreSQL pico de 79 MiB con 400 000 filas y 15 consultas simultáneas (límite 256 MiB, sin OOM); frontend 14 MiB, `products-service` 66 MiB y `orders-service` 6 MiB.
+- **`terraform plan -out=plan.tfplan`: 4 to add, 0 to change, 1 to destroy.** Solo reemplaza el grupo de nodos fallido (`t3.medium` → `t3.small`) y crea `coredns`, `kube-proxy` y `aws-ebs-csi-driver`; 67 recursos sin cambios. Verificado con `terraform show -json`: **sin delete ni replace de clúster, VPC, NAT, subredes, IGW, EIP, KMS, OIDC ni ECR**.
+- Costo estimado nuevo: ≈ 0,20 USD/h sin balanceadores y ≈ 0,23 con el del frontend (≈ 5,5 USD/día; ≈ 23 días con el crédito restante).
+- Otros cambios: `openspec/config.yaml` (se corrigió también el error de YAML de `rules.specs` que arrastraba desde el principio), `AGENTS.md` (regla de capacidad), `infra/terraform/README.md` y README de `store-gitops`.
+- Incidente menor corregido durante las pruebas: un `pkill -f` mío se mató a sí mismo; y la medición con `docker compose` ensució el stack local de la prueba anterior (se recreó limpio en el puerto 80).
+
+### Siguiente paso (lo hace el humano)
+- `cd infra/terraform && terraform apply plan.tfplan` (≈ 10–15 min; reemplaza el grupo de nodos y crea los 3 addons).
+- Después se retoma el despliegue: paso 4 (`aws eks update-kubeconfig` y `kubectl get nodes`), paso 5 (etapa de Argo CD: plan, OK y apply), paso 6 (namespace y Secrets), paso 7 (secrets y variables de GitHub), paso 8 (primer build de los 3 componentes) y paso 9 (`root-app`).
+- `git push` de `store-gitops` (2 commits locales) y de `store-app` solo con confirmación.
+
+### Paso 3d — `terraform apply` del plan nuevo (nodos t3.small) ✅
+- Confirmado por el usuario ("Tú lo ejecutas ahora") y ejecutado en segundo plano: `terraform apply plan.tfplan` → **Apply complete! 4 added, 0 changed, 1 destroyed** en 3 min 32 s (grupo de nodos nuevo 1 min 49 s; `kube-proxy` 29 s, `coredns` 53 s, `aws-ebs-csi-driver` 39 s; el grupo fallido se destruyó en 7 s). Cluster, VPC y NAT no se tocaron. Salidas: `cluster_name`, `ecr_repository_urls`, `github_actions_role_arn` y `update_kubeconfig_command`.
+
+### Paso 4 — `kubectl` ✅
+- `aws eks update-kubeconfig --name store-eks --region us-east-1` (el contexto actual de `kubectl` ya apunta al clúster nuevo, no al antiguo `app-nube-2-dev-eks`).
+- `kubectl get nodes` → **2 nodos `Ready`** (`t3.small`, una por zona: `us-east-1a` y `us-east-1b`), Kubernetes v1.36.5.
+- Capacidad real por nodo (`allocatable`): **11 pods, 1930m de CPU y 1 433 MiB** de memoria (la estimación era 1 434 MiB).
+- Pods de `kube-system`: **8**, los esperados (6 DaemonSets: `aws-node`, `kube-proxy` y `ebs-csi-node` × 2; `coredns` y `ebs-csi-controller` con 1 réplica). Requests reales: 520m de CPU y 510 MiB de memoria (estimación inicial: 550 MiB, algo conservadora). Se corrigieron las constantes de `scripts/check-capacity.py`, el spec `cluster-capacity`, el design y el README: total **1 310 MiB = 46 %** de 2 866 MiB, 17 pods de 22 (5 libres; 3 tras el rolling update de la demo).
+
+### Paso 5 — Etapa de Argo CD: `terraform plan` ✅, a la espera del OK para el `apply`
+- `terraform init` y `terraform plan -out=plan.tfplan` en `infra/terraform/argocd` → **Plan: 3 to add, 0 to change, 0 to destroy** (el archivo del plan está ignorado por git).
+- Recursos: `helm_release.argocd` (chart `argo-cd` 10.17.2, namespace `argocd`, `atomic`, `dex` y `notifications` apagados, ApplicationSet con 0 réplicas, 1 réplica y recursos mínimos en controlador, repo-server, server y redis), `kubernetes_annotations.gp2_not_default` (quita `is-default-class` a `gp2`) y `kubernetes_storage_class_v1.gp3` (`ebs.csi.aws.com`, `WaitForFirstConsumer`, expansión permitida, por defecto).
+- Estado previo comprobado: solo existe la StorageClass `gp2`; no existen los namespaces `argocd` ni `store`. Esta etapa no añade costo propio (los pods van en los nodos existentes).
+
+### Paso 5b — `terraform apply` de la etapa de Argo CD ✅
+- Confirmado por el usuario ("ejecuta tú el apply de Argo CD") y ejecutado en segundo plano: **Apply complete! 3 added, 0 changed, 0 destroyed** en 1 min 9 s (`helm_release` 1 min 5 s).
+- Verificado: pods de `argocd` **4 en `Running`** (`argocd-application-controller-0`, `argocd-redis`, `argocd-repo-server`, `argocd-server`) más el Job `argocd-redis-secret-init` en `Completed`; `argocd-applicationset-controller` en `0/0`; sin `dex` ni `notifications`. StorageClass **`gp3 (default)`** (`ebs.csi.aws.com`, `WaitForFirstConsumer`, expansión permitida) y `gp2` ya no es la predeterminada.
+- Capacidad real tras instalar Argo CD: 13 pods en el clúster (22 admisibles); en `kubectl describe nodes` la suma de **limits** de memoria de un nodo llega al 127 % (sobreasignación de límites, normal) y los requests están en 27–34 %.
+
+### Paso 6 — Change `infra-free-tier-nodes` validado y archivado ✅
+- Validación: `openspec validate infra-free-tier-nodes` válido, `openspec validate --specs` 21 passed, `terraform fmt -check` y `validate` OK en ambas etapas, `scripts/check-capacity.py` OK (17 de 22 pods, 1 310 MiB = 46 %) y `./init.sh` con código 0. El clúster real cumple los escenarios de los specs: 2 × `t3.small`, `coredns` y `ebs-csi-controller` con 1 réplica, 4 pods de Argo CD y `gp3` por defecto.
+- Archivado por confirmación del usuario en `openspec/changes/archive/2026-11-17-infra-free-tier-nodes/`. Specs sincronizados: `cluster-capacity` (nuevo, 3 requisitos) y modificados `eks-cluster`, `cluster-storage`, `argocd-install`, `k8s-workloads` y `k8s-databases`.
+- Pendiente de commit (lo hace el humano): `store-app` con los cambios sin commitear; `store-gitops` con 2 commits locales (`4501d4e`, `ffcb37c`) sin push.
+
+### Paso 7 — Namespace `store` y Secrets de las bases de datos ✅
+- Confirmado por el usuario y creados con los comandos del README de `store-gitops`: `namespace/store`, `secret/products-db-credentials` y `secret/orders-db-credentials` (cada uno con `POSTGRES_PASSWORD` y `DATABASE_URL`).
+- Contraseñas aleatorias de 32 caracteres (`openssl rand -hex 16`) generadas dentro de la misma orden: **no se mostraron ni se escribieron en ningún archivo**; las variables de shell se vaciaron al terminar. Comprobado sin ver valores: cada `DATABASE_URL` contiene su contraseña y apunta a `products-db` y `orders-db` respectivamente; `git` no ve archivos de secretos.
+- No se aplicó el Application raíz de Argo CD (se hará después de ver las imágenes en ECR y los tags en `store-gitops`).
+
+### Paso 8 — Secrets y variables de GitHub (lista entregada al usuario; los crea él) ⏳
+- `store-app` → *Settings → Secrets and variables → Actions*: no existe ninguna variable ni secret todavía; Actions están habilitadas y no hay ejecuciones previas.
+- A crear: **Secret `GITOPS_TOKEN`** (fine-grained PAT limitado a `store-gitops`, *Contents: Read and write*, con expiración), **Variable `AWS_ROLE_ARN`** (salida `github_actions_role_arn`; el valor con la cuenta no se registra aquí) y **Variable `AWS_REGION`** = `us-east-1` (opcional; es el valor por defecto). Las URL de ECR y la cuenta **no** hacen falta: el workflow las obtiene con `amazon-ecr-login`.
+- `store-gitops` en GitHub: repositorio **público** (Argo CD lo lee sin credenciales), rama `main` **sin protección**, un solo commit remoto (`feat: add Kustomize manifests and Argo CD applications`).
+
+### Paso 9 — `workflow_dispatch` para el primer build ✅ (sin cambios necesarios)
+- Los 3 workflows (`frontend.yml`, `products-service.yml`, `orders-service.yml`) ya tienen `workflow_dispatch` y están en `origin/main` junto con `_deploy-component.yml`. `gh` 2.97 está instalado y autenticado. Se lanzan con `gh workflow run <archivo> --repo <dueño>/store-app --ref main` (solo desde `main`, por la confianza OIDC del rol).
+- **Antes de lanzarlos, hacer push de los 2 commits locales de `store-gitops`**: así el bot de la CI edita sobre la versión con 1 réplica y los recursos nuevos, y se evita que el push posterior diverja.
+- Orden previsto: GitHub (variables y token) → push de `store-gitops` → lanzar los 3 workflows → ver las 3 imágenes en ECR (`aws ecr describe-images`) y los commits `deploy(<servicio>): <sha>` en `store-gitops` → **solo entonces** aplicar `kubectl apply -f argocd/root-app.yaml`.
 

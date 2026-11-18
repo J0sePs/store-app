@@ -77,6 +77,17 @@
       ],
       "status": "pending",
       "evidence": ""
+    },
+    {
+      "id": "change-8",
+      "name": "infra-free-tier-nodes",
+      "description": "Ajusta el despliegue al plan Gratuito de AWS: 2 x t3.small, addons y Argo CD con una réplica, aplicación con requests mínimos y presupuesto de pods y memoria",
+      "dependencies": [
+        "change-4",
+        "change-5"
+      ],
+      "status": "done",
+      "evidence": "Código y plan listos; el terraform apply lo ejecuta el usuario (NO se aplicó nada en este change). terraform fmt -check y validate OK en ambas etapas; terraform plan -out=plan.tfplan: 4 to add, 0 to change, 1 to destroy: solo reemplaza el grupo de nodos fallido (t3.medium -> t3.small, 2/2/2) y crea coredns (replicaCount 1), kube-proxy y aws-ebs-csi-driver (controller.replicaCount 1); 67 recursos sin cambios; sin delete ni replace de clúster, VPC, NAT, subredes, IGW, EIP, KMS, OIDC ni ECR (analizado con terraform show -json); Argo CD: helm template con values.yaml -> 4 pods (controller, repo-server, server, redis), sin dex ni notifications, applicationset 0, claves validadas contra el chart 10.17.2; PostgreSQL en Docker con 256Mi, uid 70, cap-drop ALL, shared_buffers=32MB y max_connections=20: pico 79 MiB con 400k filas y 15 consultas simultáneas, sin OOM; consumo real de la aplicación con docker compose: frontend 14 MiB, products-service 66 MiB, orders-service 6 MiB, bases 22 MiB; scripts/check-capacity.py: 17 de 22 pods (5 libres; 3 tras el rolling update de la demo), 1 350 de 2 868 MiB (47 %), y falla en 4 casos inválidos probados; store-gitops: 2 commits locales sin push (4501d4e, ffcb37c); openspec validate infra-free-tier-nodes válido; ./init.sh exit 0; aplicado en AWS: apply de los nodos (4 added, 1 destroyed) y de Argo CD (3 added); clúster real verificado (2 x t3.small Ready, coredns y ebs-csi-controller con 1 réplica, 4 pods de Argo CD, gp3 por defecto); archivado en openspec/changes/archive/2026-11-17-infra-free-tier-nodes; main spec cluster-capacity y modificados eks-cluster, cluster-storage, argocd-install, k8s-workloads y k8s-databases"
     }
   ]
 }

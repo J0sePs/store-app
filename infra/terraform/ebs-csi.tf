@@ -23,6 +23,13 @@ resource "aws_eks_addon" "ebs_csi" {
   addon_name               = "aws-ebs-csi-driver"
   service_account_role_arn = module.ebs_csi_irsa.arn
 
+  # Una sola réplica del controlador: nodos t3.small de solo 11 pods (ver scripts/check-capacity.py)
+  configuration_values = jsonencode({
+    controller = {
+      replicaCount = 1
+    }
+  })
+
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 

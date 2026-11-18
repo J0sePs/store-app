@@ -1,0 +1,54 @@
+# Valores de Helm de Argo CD para nodos pequeños (2 x t3.small, 11 pods y ~1,4 GiB asignables por nodo).
+# Quedan 4 pods de larga vida: controlador, repo-server, server y redis.
+# Los lee el helm_release (argocd.tf) y scripts/check-capacity.py: es la única fuente de estos valores.
+
+# Componentes que no se necesitan para esta demo
+dex:
+  enabled: false
+notifications:
+  enabled: false
+applicationSet:
+  # El chart no tiene "enabled" para este componente: se deja sin réplicas
+  replicas: 0
+
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 192Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+
+repoServer:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+
+server:
+  replicas: 1
+  # Sin balanceador (ahorra costo): la interfaz se abre con kubectl port-forward
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 192Mi
+
+redis:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi

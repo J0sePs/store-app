@@ -23,7 +23,8 @@ context: |
   - docker-compose.yml at the root to run everything locally without AWS.
 
   Infrastructure (infra/terraform): region us-east-1, VPC with a single NAT gateway,
-  EKS with a managed node group (2 x t3.medium), 3 ECR repositories, EBS CSI addon,
+  EKS with a managed node group (2 x t3.small: the AWS Free plan only allows free-tier eligible
+  instance types), 3 ECR repositories, EBS CSI addon,
   gp3 StorageClass, GitHub OIDC provider plus an IAM role for GitHub Actions,
   Argo CD installed via helm_release in a separate stage (infra/terraform/argocd).
 
@@ -37,15 +38,21 @@ context: |
   PostgreSQL as a StatefulSet with a gp3 PVC (one per service), probes on /health,
   requests/limits set. DB secrets are NOT stored in git; document how to create them.
 
+  Capacity (2 x t3.small): at most 11 pods and ~1.4 GiB allocatable per node (22 pods in total).
+  One replica per Deployment, one replica for CoreDNS, the EBS CSI controller and each Argo CD
+  component (dex, notifications and applicationSet off). Keep at least 3 free pods for the
+  rolling update. Before adding pods, replicas or memory requests, run scripts/check-capacity.py.
+
 rules:
   proposal:
     - Máximo 400 palabras. Indica qué componente de la arquitectura afecta.
   specs:
     - Requisitos con escenarios WHEN/THEN verificables.
-    - Para APIs: endpoints, códigos HTTP y esquema JSON (campos en inglés).
+    - "Para APIs: endpoints, códigos HTTP y esquema JSON (campos en inglés)."
   design:
     - Incluye un diagrama Mermaid del componente afectado.
     - Justifica cada decisión técnica en 1-2 líneas.
+    - Si el change añade pods, réplicas o requests de memoria, incluye el presupuesto de capacidad (scripts/check-capacity.py).
   tasks:
     - Tareas pequeñas y verificables. Incluye tareas de tests y de README.
     - Verifica que los nombres de archivos, carpetas e identificadores estén en inglés.

@@ -12,3 +12,7 @@ github_owner = "your-github-user"
 
 # Pon false si tu cuenta de AWS ya tiene el proveedor OIDC de GitHub
 # create_github_oidc_provider = false
+
+# Tipo de nodos: por defecto t3.small, el que permite el plan Gratuito de AWS (2 nodos, 11 pods cada uno).
+# Solo en una cuenta de pago puedes usar nodos más grandes:
+# node_instance_types = ["t3.medium"]

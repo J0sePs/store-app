@@ -4,7 +4,7 @@ Infraestructura de `store-app` en AWS (región `us-east-1`), en **dos etapas** c
 
 | Etapa | Carpeta | Qué crea |
 |---|---|---|
-| 1 | `infra/terraform/` | VPC (2 zonas, 1 NAT), clúster EKS (2 × t3.medium), 3 repositorios ECR, addon EBS CSI con su rol IAM, proveedor OIDC de GitHub y el rol de CI |
+| 1 | `infra/terraform/` | VPC (2 zonas, 1 NAT), clúster EKS (2 × t3.small), 3 repositorios ECR, addon EBS CSI con su rol IAM, proveedor OIDC de GitHub y el rol de CI |
 | 2 | `infra/terraform/argocd/` | Argo CD (`helm_release`) y la StorageClass `gp3` por defecto |
 
 > **`terraform apply` y `terraform destroy` los ejecutas tú.** Crean y borran recursos que cuestan dinero. Ningún agente de IA debe ejecutarlos sin tu confirmación (regla de `AGENTS.md`). `terraform fmt` y `terraform validate` se pueden correr libremente.
@@ -38,15 +38,42 @@ Valores aproximados de lista en `us-east-1` (verifícalos en la [calculadora de 
 | Componente | USD/hora aprox. |
 |---|---|
 | Plano de control de EKS | 0,100 |
-| 2 nodos `t3.medium` (0,0416 cada uno) | 0,083 |
+| 2 nodos `t3.small` (0,0208 cada uno) | 0,042 |
 | NAT gateway (sin contar tráfico, 0,045/GB) | 0,045 |
 | IPv4 pública del NAT | 0,005 |
-| Volúmenes EBS gp3 (nodos y 2 bases de datos) | 0,006 |
-| **Subtotal sin balanceadores** | **≈ 0,24** |
+| Volúmenes EBS gp3 (nodos y 2 bases de datos), KMS y logs | 0,007 |
+| **Subtotal sin balanceadores** | **≈ 0,20** |
 | Cada Service `LoadBalancer` (balanceador + IPv4 públicas) | ≈ 0,03 |
-| **Total con el balanceador del frontend** | **≈ 0,27 (≈ 6,5 USD al día)** |
+| **Total con el balanceador del frontend** | **≈ 0,23 (≈ 5,5 USD al día)** |
 
 ECR cobra por almacenamiento (centavos con la política de 10 imágenes). Argo CD no añade costo si se accede por `port-forward`.
+
+> **Plan Gratuito de AWS:** una cuenta en el plan Gratuito (`aws freetier get-account-plan-state`) solo puede lanzar instancias elegibles para la capa gratuita y consume crédito (por ejemplo, 129,60 USD ≈ 23 días encendido a 0,23 USD/h). Por eso los nodos son `t3.small`: con `t3.medium` el grupo de nodos falla con `InvalidParameterCombination … not eligible for Free Tier`. En una cuenta de pago puedes volver a nodos más grandes con `node_instance_types = ["t3.medium"]` en `terraform.tfvars`.
+
+## Capacidad del clúster (2 × t3.small)
+
+Cada `t3.small` admite como máximo **11 pods** y ofrece ≈ **1,4 GiB** de memoria asignable (22 pods y ≈ 2,8 GiB en total). Para que todo quepa:
+
+- Una réplica por Deployment de la aplicación, una por CoreDNS y por el controlador del driver EBS CSI (`configuration_values` de los addons) y 4 pods de Argo CD (controlador, repo-server, server y redis; `dex`, `notifications` y el controlador de ApplicationSet desactivados en `argocd/values.yaml`).
+- `requests` de memoria ajustados: PostgreSQL 128Mi (con `shared_buffers=32MB` y `max_connections=20`), `products-service` 96Mi, `orders-service` 32Mi y frontend 32Mi.
+
+| Grupo | Pods | Memoria solicitada |
+|---|---|---|
+| DaemonSets (`aws-node`, `kube-proxy`, `ebs-csi-node`, uno por nodo) | 6 | 208 MiB |
+| kube-system (`coredns`, `ebs-csi-controller`) | 2 | 302 MiB |
+| Argo CD | 4 | 384 MiB |
+| Aplicación (frontend, 2 servicios, 2 bases de datos) | 5 | 416 MiB |
+| **Total** | **17 de 22 (5 libres)** | **1 310 MiB de ≈ 2 866 (46 %)** |
+
+Con el rolling update de la demo (frontend y `products-service` a la vez) hay 2 pods extra y quedan 3 libres, que es el mínimo. Los valores de DaemonSets y addons son los medidos en el clúster real tras el `apply` (`kubectl get pods -n kube-system`); cada nodo `t3.small` ofrece 11 pods, 1930m de CPU y ≈ 1 433 MiB asignables.
+
+**Antes de añadir pods, réplicas o subir `requests` de memoria**, recalcula el presupuesto (necesita `kubectl` y PyYAML; el repositorio `store-gitops` debe estar en `../store-gitops`):
+
+```bash
+products-service/.venv/bin/python scripts/check-capacity.py
+```
+
+Imprime los pods y la memoria por grupo y por nodo, y termina con error si quedan menos de 3 pods libres o si los `requests` superan el 70 % de la memoria asignable.
 
 ## Pasos de `apply`
 
@@ -82,6 +109,8 @@ kubectl get pods -n argocd
 kubectl get storageclass          # gp3 debe aparecer como (default)
 ```
 
+Argo CD se instala con 4 pods (controlador, repo-server, server y redis); sus valores y recursos están en `infra/terraform/argocd/values.yaml` (ver "Capacidad del clúster").
+
 Abrir la interfaz de Argo CD:
 
 ```bash
@@ -103,7 +132,7 @@ Los hace el change `gitops-manifests` y la CI (ver `docs/prompts.md`, sección "
 | `github_repository` / `github_branch` | `store-app` / `main` | Único repositorio y rama que pueden asumir el rol de CI |
 | `cluster_name` | `store-eks` | Nombre del clúster (la etapa 2 usa el mismo) |
 | `kubernetes_version` | `1.36` | Versión de Kubernetes (EKS soporta 1.34 a 1.37) |
-| `node_instance_types`, `node_min_size`, `node_desired_size`, `node_max_size` | `t3.medium`, 2, 2, 2 | Nodos del clúster |
+| `node_instance_types`, `node_min_size`, `node_desired_size`, `node_max_size` | `t3.small`, 2, 2, 2 | Nodos del clúster (`t3.small` por el plan Gratuito) |
 | `cluster_endpoint_public_access_cidrs` | `["0.0.0.0/0"]` | Quién puede llegar al endpoint público; limítalo a tu IP |
 | `ecr_repository_names` | `frontend`, `products-service`, `orders-service` | Repositorios ECR |
 | `ecr_keep_last_images` | `10` | Imágenes que se conservan por repositorio |
@@ -167,6 +196,7 @@ aws ec2 describe-addresses --region us-east-1 --query 'Addresses[].PublicIp'
 ## Problemas frecuentes
 
 - **`EntityAlreadyExists` al crear el proveedor OIDC:** ya existe en la cuenta; usa `create_github_oidc_provider = false`.
-- **Pods en `Pending` por falta de capacidad:** 2 nodos `t3.medium` admiten unos 34 pods en total; sube `node_desired_size` y `node_max_size` o cambia `node_instance_types`.
+- **El grupo de nodos falla con `not eligible for Free Tier`:** la cuenta está en el plan Gratuito y el tipo de instancia no es elegible. Usa `t3.small` (el valor por defecto) u otro tipo de la lista de `aws ec2 describe-instance-types --filters Name=free-tier-eligible,Values=true`, o pasa la cuenta a un plan de pago.
+- **Pods en `Pending` por falta de capacidad:** 2 nodos `t3.small` admiten 22 pods en total (ver "Capacidad del clúster"). Ejecuta `scripts/check-capacity.py` para ver qué grupo ocupa más; si de verdad necesitas más, sube `node_desired_size` y `node_max_size`, o usa un tipo con más pods.
 - **Fallo del `apply` de la etapa 2 con "cluster not found":** aplica primero la etapa 1 y comprueba que `cluster_name` coincide en ambas.
 - **`kubectl` sin permisos:** el clúster da permisos de administrador solo a quien ejecutó el `apply`; usa la misma identidad de AWS.
